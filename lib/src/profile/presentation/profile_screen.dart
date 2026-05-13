@@ -59,9 +59,15 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 10),
             _Tile(
-              title: 'Reports',
-              subtitle: 'Weekly email report automation',
-              onTap: () => context.push('/reports'),
+              title: 'Sales reports',
+              subtitle: 'Weekly and monthly sales performance',
+              onTap: () => context.push('/sales-reports'),
+            ),
+            const SizedBox(height: 10),
+            _Tile(
+              title: 'Expense reports',
+              subtitle: 'Monthly expense breakdown',
+              onTap: () => context.push('/expense-reports'),
             ),
             const SizedBox(height: 10),
             _Tile(

@@ -20,7 +20,7 @@ class HistoryScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.bar_chart),
-            onPressed: () => context.push('/reports'),
+            onPressed: () => context.push('/sales-reports'),
           ),
         ],
       ),

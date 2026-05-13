@@ -9,9 +9,10 @@ import '../auth/presentation/sign_up_screen.dart';
 import '../dashboard/presentation/dashboard_screen.dart';
 import '../dashboard/presentation/edit_menu_screen.dart';
 import '../dashboard/presentation/history_screen.dart';
-import '../dashboard/presentation/reports_screen.dart';
 import '../expenses/presentation/expenses_screen.dart';
 import '../profile/presentation/profile_screen.dart';
+import '../reports/presentation/expense_reports_screen.dart';
+import '../reports/presentation/sales_reports_screen.dart';
 import 'shell_scaffold.dart';
 
 final goRouterProvider = Provider<GoRouter>((ref) {
@@ -47,8 +48,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const EditMenuScreen(),
       ),
       GoRoute(
-        path: '/reports',
-        builder: (context, state) => const ReportsScreen(),
+        path: '/sales-reports',
+        builder: (context, state) => const SalesReportsScreen(),
+      ),
+      GoRoute(
+        path: '/expense-reports',
+        builder: (context, state) => const ExpenseReportsScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
