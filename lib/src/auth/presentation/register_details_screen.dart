@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../data/auth_providers.dart';
 
 class RegisterDetailsScreen extends ConsumerStatefulWidget {
@@ -52,7 +53,6 @@ class _RegisterDetailsScreenState extends ConsumerState<RegisterDetailsScreen> {
         const SnackBar(content: Text('Account created successfully!')),
       );
       
-      // Force navigation to dashboard
       context.go('/dashboard');
 
     } on FirebaseAuthException catch (e) {

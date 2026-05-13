@@ -58,15 +58,18 @@ class _AuthGateState extends ConsumerState<AuthGate> {
                     WidgetsBinding.instance.addPostFrameCallback((_) async {
                       final repo = await ref.read(authRepositoryProvider.future);
                       await repo.setLocalDeviceName(name);
+                      // Directly update the state to avoid loop
                       ref.read(deviceNameProvider.notifier).state = name;
                     });
+                    // Show a quick loader while updating
                     return const _BlockingLoader();
                   }
                   // Fallback to manual naming if no profile name found
                   return const DeviceNameScreen();
                 },
                 loading: () => const _BlockingLoader(),
-                error: (e, _) => _BlockingError(message: e.toString()),
+                // If there's an error fetching profile, let them name the device manually
+                error: (e, _) => const DeviceNameScreen(),
               );
         }
 

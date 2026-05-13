@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'otp_verification_screen.dart';
+import 'package:go_router/go_router.dart';
 
 import '../data/auth_providers.dart';
 
@@ -46,12 +46,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         ),
       );
       
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => OtpVerificationScreen(email: email),
-        ),
-      );
+      context.push('/auth/otp?email=${Uri.encodeComponent(email)}');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

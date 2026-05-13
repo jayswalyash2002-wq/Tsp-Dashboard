@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'register_details_screen.dart';
+import 'package:go_router/go_router.dart';
 
 import '../data/auth_providers.dart';
 
@@ -48,12 +48,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
 
       if (!mounted) return;
       
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => RegisterDetailsScreen(email: widget.email),
-        ),
-      );
+      context.push('/auth/details?email=${Uri.encodeComponent(widget.email)}');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

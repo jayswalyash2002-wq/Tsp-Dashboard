@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
 
 import 'menu_item.dart';
@@ -51,7 +52,7 @@ class OrderDraft {
   final PaymentStatus paymentStatus;
   final List<SplitLine> splitLines;
 
-  int get subtotalPaise => lines.fold(0, (sum, l) => sum + l.lineTotalPaise);
+  int get subtotalPaise => lines.fold(0, (total, l) => total + l.lineTotalPaise);
 
   int get discountPaise {
     if (discountType == DiscountType.none) return 0;
@@ -95,5 +96,123 @@ class OrderDraft {
   }
 
   OrderLine? lineFor(String itemId) => lines.firstWhereOrNull((l) => l.item.id == itemId);
+
+  SavedOrder toOrder({
+    required String id,
+    required DateTime timestamp,
+    required String deviceName,
+    required String userEmail,
+    required String userId,
+  }) {
+    return SavedOrder(
+      id: id,
+      timestamp: timestamp,
+      deviceName: deviceName,
+      userEmail: userEmail,
+      userId: userId,
+      lines: lines,
+      discountType: discountType,
+      discountValue: discountValue,
+      discountReason: discountReason,
+      paymentMethod: paymentMethod,
+      paymentStatus: paymentStatus,
+      splitLines: splitLines,
+    );
+  }
+}
+
+class SavedOrder extends OrderDraft {
+  SavedOrder({
+    required this.id,
+    required this.timestamp,
+    required this.deviceName,
+    required this.userEmail,
+    required this.userId,
+    required super.lines,
+    required super.discountType,
+    required super.discountValue,
+    required super.discountReason,
+    required super.paymentMethod,
+    required super.paymentStatus,
+    required super.splitLines,
+  });
+
+  final String id;
+  final DateTime timestamp;
+  final String deviceName;
+  final String userEmail;
+  final String userId;
+
+  factory SavedOrder.fromMap(String id, Map<String, dynamic> map) {
+    final discount = map['discount'] as Map<String, dynamic>;
+    final payment = map['payment'] as Map<String, dynamic>;
+    final items = map['items'] as List<dynamic>;
+    final user = map['loggedInUser'] as Map<String, dynamic>;
+
+    return SavedOrder(
+      id: id,
+      timestamp: (map['timestamp'] as Timestamp).toDate(),
+      deviceName: map['deviceName'] as String,
+      userEmail: user['email'] as String,
+      userId: user['uid'] as String,
+      lines: items
+          .map((i) => OrderLine(
+                item: MenuItem(
+                  id: i['itemId'],
+                  name: i['name'],
+                  category: i['category'],
+                  pricePaise: i['pricePaise'],
+                  available: true, // Not relevant for past orders
+                ),
+                qty: i['qty'],
+              ))
+          .toList(),
+      discountType: DiscountType.values.byName(discount['type']),
+      discountValue: discount['value'],
+      discountReason: discount['reason'] != null
+          ? DiscountReason.values.byName(discount['reason'])
+          : null,
+      paymentMethod: PaymentMethod.values.byName(payment['method']),
+      paymentStatus: PaymentStatus.values.byName(payment['status']),
+      splitLines: (payment['splitLines'] as List<dynamic>?)
+              ?.map((s) => SplitLine(
+                    method: PaymentMethod.values.byName(s['method']),
+                    amountPaise: s['amountPaise'],
+                  ))
+              .toList() ??
+          [],
+    );
+  }
+
+  @override
+  SavedOrder copyWith({
+    List<OrderLine>? lines,
+    DiscountType? discountType,
+    int? discountValue,
+    DiscountReason? discountReason,
+    PaymentMethod? paymentMethod,
+    PaymentStatus? paymentStatus,
+    List<SplitLine>? splitLines,
+    String? id,
+    DateTime? timestamp,
+    String? deviceName,
+    String? userEmail,
+    String? userId,
+  }) {
+    return SavedOrder(
+      id: id ?? this.id,
+      timestamp: timestamp ?? this.timestamp,
+      deviceName: deviceName ?? this.deviceName,
+      userEmail: userEmail ?? this.userEmail,
+      userId: userId ?? this.userId,
+      lines: lines ?? this.lines,
+      discountType: discountType ?? this.discountType,
+      discountValue: discountValue ?? this.discountValue,
+      discountReason: discountReason ?? this.discountReason,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
+      splitLines: splitLines ?? this.splitLines,
+    );
+  }
 }
 

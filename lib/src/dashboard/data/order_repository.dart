@@ -18,6 +18,17 @@ class OrderRepository {
   final FirebaseAuth _auth;
   final AuthRepository _authRepo;
 
+  Stream<List<SavedOrder>> watchOrders() {
+    return _db
+        .collection('orders')
+        .orderBy('timestamp', descending: true)
+        .limit(100)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((doc) => SavedOrder.fromMap(doc.id, doc.data()))
+            .toList());
+  }
+
   Future<String> saveOrder(OrderDraft draft) async {
     final user = _auth.currentUser;
     if (user == null) throw StateError('Not signed in');
@@ -30,6 +41,31 @@ class OrderRepository {
     final balancesRef = _db.collection('balances').doc('current');
 
     await _db.runTransaction((tx) async {
+      // 1. PERFORM ALL READS FIRST
+      final balancesSnap = await tx.get(balancesRef);
+      
+      // 2. PERFORM ALL WRITES
+      if (draft.paymentStatus == PaymentStatus.paid) {
+        final data = balancesSnap.data() ?? {};
+        int cash = data['cashBalancePaise'] ?? 0;
+        int bank = data['bankBalancePaise'] ?? 0;
+
+        final newImpact = _calculateImpact(draft);
+        cash += newImpact.cash;
+        bank += newImpact.bank;
+
+        tx.set(
+          balancesRef,
+          {
+            'cashBalancePaise': cash,
+            'bankBalancePaise': bank,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'updatedAtMs': DateTime.now().millisecondsSinceEpoch,
+          },
+          SetOptions(merge: true),
+        );
+      }
+
       tx.set(orderRef, {
         'orderId': orderId,
         'timestamp': Timestamp.fromDate(now),
@@ -64,53 +100,107 @@ class OrderRepository {
           'splitLines': [for (final s in draft.splitLines) s.toMap()],
         },
       });
-
-      // Only affect balances when paid (operational accounting).
-      if (draft.paymentStatus == PaymentStatus.paid) {
-        final balancesSnap = await tx.get(balancesRef);
-        final data = balancesSnap.data() ?? <String, dynamic>{};
-        final cash = (data['cashBalancePaise'] ?? 0) is int
-            ? (data['cashBalancePaise'] as int)
-            : int.tryParse('${data['cashBalancePaise']}') ?? 0;
-        final bank = (data['bankBalancePaise'] ?? 0) is int
-            ? (data['bankBalancePaise'] as int)
-            : int.tryParse('${data['bankBalancePaise']}') ?? 0;
-
-        int cashDelta = 0;
-        int bankDelta = 0;
-
-        switch (draft.paymentMethod) {
-          case PaymentMethod.cash:
-            cashDelta = draft.totalPaise;
-            break;
-          case PaymentMethod.upi:
-          case PaymentMethod.card:
-            bankDelta = draft.totalPaise;
-            break;
-          case PaymentMethod.split:
-            for (final s in draft.splitLines) {
-              if (s.method == PaymentMethod.cash) cashDelta += s.amountPaise;
-              if (s.method == PaymentMethod.upi || s.method == PaymentMethod.card) {
-                bankDelta += s.amountPaise;
-              }
-            }
-            break;
-        }
-
-        tx.set(
-          balancesRef,
-          {
-            'cashBalancePaise': cash + cashDelta,
-            'bankBalancePaise': bank + bankDelta,
-            'updatedAt': FieldValue.serverTimestamp(),
-            'updatedAtMs': DateTime.now().millisecondsSinceEpoch,
-          },
-          SetOptions(merge: true),
-        );
-      }
     });
 
     return orderId;
   }
+
+  Future<void> updateOrder(SavedOrder oldOrder, SavedOrder newOrder) async {
+    final orderRef = _db.collection('orders').doc(oldOrder.id);
+    final balancesRef = _db.collection('balances').doc('current');
+
+    await _db.runTransaction((tx) async {
+      // 1. PERFORM ALL READS FIRST
+      final balancesSnap = await tx.get(balancesRef);
+
+      // 2. PERFORM ALL WRITES
+      final data = balancesSnap.data() ?? {};
+      int cash = data['cashBalancePaise'] ?? 0;
+      int bank = data['bankBalancePaise'] ?? 0;
+
+      // Remove old order impact if it was paid
+      if (oldOrder.paymentStatus == PaymentStatus.paid) {
+        final oldImpact = _calculateImpact(oldOrder);
+        cash -= oldImpact.cash;
+        bank -= oldImpact.bank;
+      }
+
+      // Add new order impact if it is paid
+      if (newOrder.paymentStatus == PaymentStatus.paid) {
+        final newImpact = _calculateImpact(newOrder);
+        cash += newImpact.cash;
+        bank += newImpact.bank;
+      }
+
+      tx.set(
+        balancesRef,
+        {
+          'cashBalancePaise': cash,
+          'bankBalancePaise': bank,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedAtMs': DateTime.now().millisecondsSinceEpoch,
+        },
+        SetOptions(merge: true),
+      );
+
+      tx.update(orderRef, {
+        'items': [
+          for (final l in newOrder.lines)
+            {
+              'itemId': l.item.id,
+              'name': l.item.name,
+              'category': l.item.category,
+              'pricePaise': l.item.pricePaise,
+              'qty': l.qty,
+              'lineTotalPaise': l.lineTotalPaise,
+            }
+        ],
+        'subtotalPaise': newOrder.subtotalPaise,
+        'discount': {
+          'type': newOrder.discountType.name,
+          'value': newOrder.discountValue,
+          'reason': newOrder.discountReason?.name,
+          'discountPaise': newOrder.discountPaise,
+        },
+        'totalPaise': newOrder.totalPaise,
+        'payment': {
+          'method': newOrder.paymentMethod.name,
+          'status': newOrder.paymentStatus.name,
+          'splitLines': [for (final s in newOrder.splitLines) s.toMap()],
+        },
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  _Impact _calculateImpact(OrderDraft draft) {
+    int cash = 0;
+    int bank = 0;
+
+    switch (draft.paymentMethod) {
+      case PaymentMethod.cash:
+        cash = draft.totalPaise;
+        break;
+      case PaymentMethod.upi:
+      case PaymentMethod.card:
+        bank = draft.totalPaise;
+        break;
+      case PaymentMethod.split:
+        for (final s in draft.splitLines) {
+          if (s.method == PaymentMethod.cash) cash += s.amountPaise;
+          if (s.method == PaymentMethod.upi || s.method == PaymentMethod.card) {
+            bank += s.amountPaise;
+          }
+        }
+        break;
+    }
+    return _Impact(cash, bank);
+  }
+}
+
+class _Impact {
+  _Impact(this.cash, this.bank);
+  final int cash;
+  final int bank;
 }
 

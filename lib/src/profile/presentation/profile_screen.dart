@@ -1,20 +1,57 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../auth/data/auth_providers.dart';
+import '../../core/firebase/firebase_providers.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authStateChangesProvider).value;
+    final profile = ref.watch(userProfileProvider).value;
+    final deviceName = ref.watch(deviceNameProvider);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // User Header
+            Card(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      child: Text(
+                        (profile?['displayName'] ?? user?.email ?? '?')[0].toUpperCase(),
+                        style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      profile?['displayName'] ?? 'User',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      user?.email ?? 'No email',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
             _Tile(
               title: 'Edit menu',
               subtitle: 'Add, edit, disable items',
@@ -24,27 +61,28 @@ class ProfileScreen extends ConsumerWidget {
             _Tile(
               title: 'Reports',
               subtitle: 'Weekly email report automation',
-              onTap: () {},
+              onTap: () => context.push('/reports'),
             ),
             const SizedBox(height: 10),
             _Tile(
               title: 'Device settings',
-              subtitle: 'Device name and notifications',
+              subtitle: 'Device: ${deviceName ?? "Not set"}',
               onTap: () {},
             ),
             const SizedBox(height: 10),
             _Tile(
               title: 'Account info',
-              subtitle: 'Signed in user details',
+              subtitle: 'Created: ${profile?['createdAt'] != null ? (profile!['createdAt'] as Timestamp).toDate().toString().split(' ')[0] : "Recently"}',
               onTap: () {},
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 24),
             FilledButton.tonal(
               onPressed: () async {
                 final repo = await ref.read(authRepositoryProvider.future);
                 await repo.signOut();
                 // Clear local device name state on logout
                 ref.read(deviceNameProvider.notifier).state = null;
+                if (context.mounted) context.go('/auth');
               },
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(56),

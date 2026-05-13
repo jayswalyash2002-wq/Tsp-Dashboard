@@ -30,11 +30,19 @@ class DashboardScreen extends ConsumerWidget {
     }
 
     final menu = ref.watch(menuItemsProvider);
-    final draft = ref.watch(orderControllerProvider);
+    final orderState = ref.watch(orderControllerProvider);
+    final draft = orderState.draft;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TSP Dashboard'),
+        title: Text(orderState.isEditing ? 'Edit Order' : 'TSP Dashboard'),
+        actions: [
+          if (orderState.isEditing)
+            TextButton(
+              onPressed: () => ref.read(orderControllerProvider.notifier).clear(),
+              child: const Text('Cancel Edit', style: TextStyle(color: Colors.red)),
+            ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(24),
           child: Padding(
@@ -316,18 +324,16 @@ class _CurrentOrderBar extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Expanded(
+            Expanded(
                 child: FilledButton(
                   onPressed: (!draft.hasItems || !draft.splitValid)
                       ? null
                       : () async {
                           final messenger = ScaffoldMessenger.of(context);
                           try {
-                            final repo = await ref.read(orderRepositoryProvider.future);
-                            final orderId = await repo.saveOrder(draft);
-                            ref.read(orderControllerProvider.notifier).clear();
+                            await ref.read(orderControllerProvider.notifier).submit();
                             messenger.showSnackBar(
-                              SnackBar(content: Text('Order saved: $orderId')),
+                              const SnackBar(content: Text('Order saved successfully')),
                             );
                           } catch (e) {
                             messenger.showSnackBar(
@@ -342,7 +348,11 @@ class _CurrentOrderBar extends ConsumerWidget {
                     ),
                   ),
                   child: Text(
-                    draft.splitValid ? 'Save order' : 'Fix split payment',
+                    !draft.splitValid
+                        ? 'Fix split payment'
+                        : (ref.watch(orderControllerProvider).isEditing
+                            ? 'Update order'
+                            : 'Save order'),
                   ),
                 ),
               ),
@@ -531,7 +541,7 @@ class _CompactSelect<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<T>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(labelText: label),
       items: items.entries
           .map(

@@ -1,49 +1,84 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/dashboard_providers.dart';
 import '../domain/menu_item.dart';
 import '../domain/order_models.dart';
 
-final orderControllerProvider =
-    NotifierProvider<OrderController, OrderDraft>(OrderController.new);
+class OrderControllerState {
+  OrderControllerState({
+    required this.draft,
+    this.originalOrder,
+  });
 
-class OrderController extends Notifier<OrderDraft> {
+  final OrderDraft draft;
+  final SavedOrder? originalOrder;
+
+  bool get isEditing => originalOrder != null;
+
+  OrderControllerState copyWith({
+    OrderDraft? draft,
+    SavedOrder? originalOrder,
+    bool clearOriginal = false,
+  }) {
+    return OrderControllerState(
+      draft: draft ?? this.draft,
+      originalOrder: clearOriginal ? null : (originalOrder ?? this.originalOrder),
+    );
+  }
+}
+
+final orderControllerProvider =
+    NotifierProvider<OrderController, OrderControllerState>(OrderController.new);
+
+class OrderController extends Notifier<OrderControllerState> {
   @override
-  OrderDraft build() {
-    return OrderDraft(
-      lines: const [],
-      discountType: DiscountType.none,
-      discountValue: 0,
-      discountReason: null,
-      paymentMethod: PaymentMethod.cash,
-      paymentStatus: PaymentStatus.paid,
-      splitLines: const [],
+  OrderControllerState build() {
+    return OrderControllerState(
+      draft: OrderDraft(
+        lines: const [],
+        discountType: DiscountType.none,
+        discountValue: 0,
+        discountReason: null,
+        paymentMethod: PaymentMethod.cash,
+        paymentStatus: PaymentStatus.paid,
+        splitLines: const [],
+      ),
+    );
+  }
+
+  void editOrder(SavedOrder order) {
+    state = OrderControllerState(
+      draft: order, // Order is a subclass of OrderDraft
+      originalOrder: order,
     );
   }
 
   void add(MenuItem item) {
-    final existing = state.lineFor(item.id);
+    final existing = state.draft.lineFor(item.id);
     if (existing == null) {
-      state = state.copyWith(lines: [...state.lines, OrderLine(item: item, qty: 1)]);
+      state = state.copyWith(
+        draft: state.draft.copyWith(lines: [...state.draft.lines, OrderLine(item: item, qty: 1)]),
+      );
     } else {
       setQty(item.id, existing.qty + 1);
     }
   }
 
   void increment(String itemId) {
-    final line = state.lineFor(itemId);
+    final line = state.draft.lineFor(itemId);
     if (line == null) return;
     setQty(itemId, line.qty + 1);
   }
 
   void decrement(String itemId) {
-    final line = state.lineFor(itemId);
+    final line = state.draft.lineFor(itemId);
     if (line == null) return;
     setQty(itemId, line.qty - 1);
   }
 
   void setQty(String itemId, int qty) {
     final next = <OrderLine>[];
-    for (final l in state.lines) {
+    for (final l in state.draft.lines) {
       if (l.item.id != itemId) {
         next.add(l);
         continue;
@@ -51,38 +86,61 @@ class OrderController extends Notifier<OrderDraft> {
       if (qty <= 0) continue;
       next.add(OrderLine(item: l.item, qty: qty));
     }
-    state = state.copyWith(lines: next);
+    state = state.copyWith(draft: state.draft.copyWith(lines: next));
   }
 
   void setDiscountType(DiscountType type) {
     state = state.copyWith(
-      discountType: type,
-      discountValue: type == DiscountType.none ? 0 : state.discountValue,
-      discountReason: type == DiscountType.none ? null : state.discountReason,
+      draft: state.draft.copyWith(
+        discountType: type,
+        discountValue: type == DiscountType.none ? 0 : state.draft.discountValue,
+        discountReason: type == DiscountType.none ? null : state.draft.discountReason,
+      ),
     );
   }
 
   void setDiscountValue(int value) {
-    state = state.copyWith(discountValue: value);
+    state = state.copyWith(draft: state.draft.copyWith(discountValue: value));
   }
 
   void setDiscountReason(DiscountReason? reason) {
-    state = state.copyWith(discountReason: reason);
+    state = state.copyWith(draft: state.draft.copyWith(discountReason: reason));
   }
 
   void setPaymentMethod(PaymentMethod method) {
     state = state.copyWith(
-      paymentMethod: method,
-      splitLines: method == PaymentMethod.split ? state.splitLines : const [],
+      draft: state.draft.copyWith(
+        paymentMethod: method,
+        splitLines: method == PaymentMethod.split ? state.draft.splitLines : const [],
+      ),
     );
   }
 
   void setPaymentStatus(PaymentStatus status) {
-    state = state.copyWith(paymentStatus: status);
+    state = state.copyWith(draft: state.draft.copyWith(paymentStatus: status));
   }
 
   void setSplitLines(List<SplitLine> lines) {
-    state = state.copyWith(splitLines: lines);
+    state = state.copyWith(draft: state.draft.copyWith(splitLines: lines));
+  }
+
+  Future<void> submit() async {
+    final repo = await ref.read(orderRepositoryProvider.future);
+    if (state.isEditing) {
+      final updated = state.originalOrder!.copyWith(
+        lines: state.draft.lines,
+        discountType: state.draft.discountType,
+        discountValue: state.draft.discountValue,
+        discountReason: state.draft.discountReason,
+        paymentMethod: state.draft.paymentMethod,
+        paymentStatus: state.draft.paymentStatus,
+        splitLines: state.draft.splitLines,
+      );
+      await repo.updateOrder(state.originalOrder!, updated);
+    } else {
+      await repo.saveOrder(state.draft);
+    }
+    clear();
   }
 
   void clear() {

@@ -1,9 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../data/auth_providers.dart';
-import 'sign_up_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -110,12 +110,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
                 OutlinedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context, 
-                      MaterialPageRoute(builder: (context) => const SignUpScreen()),
-                    );
-                  },
+                  onPressed: () => context.push('/auth/signup'),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size.fromHeight(60),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
