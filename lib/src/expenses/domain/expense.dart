@@ -39,7 +39,7 @@ class Expense {
       id: id,
       amountPaise: map['amountPaise'] ?? 0,
       category: map['category'] ?? 'Miscellaneous',
-      paymentMethod: PaymentMethod.values.byName(map['paymentMethod'] ?? 'cash'),
+      paymentMethod: PaymentMethod.fromString(map['paymentMethod']),
       notes: map['notes'] ?? '',
       createdBy: map['createdBy'] ?? '',
       timestamp: (map['timestamp'] as Timestamp).toDate(),

@@ -19,9 +19,8 @@ class DashboardScreen extends ConsumerWidget {
     String userName = 'User';
     
     profileAsync.whenData((profile) {
-      final name = profile?['displayName'] as String?;
-      if (name != null && name.isNotEmpty) {
-        userName = name;
+      if (profile != null) {
+        userName = '${profile.displayName} (${profile.role.name})';
       }
     });
 
@@ -96,8 +95,8 @@ class DashboardScreen extends ConsumerWidget {
                   // 3. Categories must render using categorySortOrder.
                   final sortedCategories = grouped.keys.toList()
                     ..sort((a, b) {
-                      final orderA = grouped[a]!.first.categorySortOrder;
-                      final orderB = grouped[b]!.first.categorySortOrder;
+                      final orderA = grouped[a]?.firstOrNull?.categorySortOrder ?? 0;
+                      final orderB = grouped[b]?.firstOrNull?.categorySortOrder ?? 0;
                       final res = orderA.compareTo(orderB);
                       if (res != 0) return res;
                       return a.compareTo(b);

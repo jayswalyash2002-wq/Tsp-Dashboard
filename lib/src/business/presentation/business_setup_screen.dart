@@ -21,9 +21,11 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   final _gstController = TextEditingController();
+  final _fssaiController = TextEditingController();
   
   String? _selectedType;
   bool _isGstRegistered = false;
+  bool _isFssaiRegistered = false;
   File? _logoFile;
   String? _existingLogoUrl;
   bool _isLoading = false;
@@ -42,24 +44,27 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_isInitialized) {
-      final businessAsync = ref.watch(currentBusinessProvider);
-      businessAsync.whenData((business) {
-        if (business != null) {
-          _nameController.text = business.businessName;
-          _emailController.text = business.officialEmail;
-          _phoneController.text = business.phoneNumber;
-          _addressController.text = business.address ?? '';
-          _gstController.text = business.gstNumber ?? '';
-          _selectedType = _businessTypes.contains(business.businessType) ? business.businessType : 'Other';
-          _isGstRegistered = business.isGstRegistered;
-          _existingLogoUrl = business.logoUrl;
-          setState(() {
-            _isInitialized = true;
-          });
-        }
-      });
-    }
+
+    if (_isInitialized) return;
+
+    final businessAsync = ref.watch(currentBusinessProvider);
+
+    businessAsync.whenData((business) {
+      if (business != null) {
+        _isInitialized = true;
+        _nameController.text = business.businessName;
+        _emailController.text = business.officialEmail;
+        _phoneController.text = business.phoneNumber;
+        _addressController.text = business.address ?? '';
+        _gstController.text = business.gstNumber ?? '';
+        _fssaiController.text = business.fssaiNumber ?? '';
+        _selectedType = _businessTypes.contains(business.businessType) ? business.businessType : 'Other';
+        _isGstRegistered = business.isGstRegistered;
+        _isFssaiRegistered = business.isFssaiRegistered;
+        _existingLogoUrl = business.logoUrl;
+        setState(() {});
+      }
+    });
   }
 
   @override
@@ -69,6 +74,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
     _phoneController.dispose();
     _addressController.dispose();
     _gstController.dispose();
+    _fssaiController.dispose();
     super.dispose();
   }
 
@@ -96,16 +102,20 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
 
       final repo = ref.read(businessRepositoryProvider);
       final existingBusiness = ref.read(currentBusinessProvider).value;
+      final profile = ref.read(userProfileProvider).value;
       
       String? logoUrl = _existingLogoUrl;
       
       final businessData = Business(
         id: existingBusiness?.id ?? '',
         businessName: _nameController.text.trim(),
+        ownerName: profile?.displayName ?? 'Owner',
         officialEmail: _emailController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
         businessType: _selectedType ?? 'Other',
         gstNumber: _isGstRegistered ? _gstController.text.trim() : null,
+        isFssaiRegistered: _isFssaiRegistered,
+        fssaiNumber: _isFssaiRegistered ? _fssaiController.text.trim() : null,
         address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
         logoUrl: logoUrl,
         createdAt: existingBusiness?.createdAt ?? DateTime.now(),
@@ -125,10 +135,13 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           final finalBusiness = Business(
             id: businessId,
             businessName: businessData.businessName,
+            ownerName: businessData.ownerName,
             officialEmail: businessData.officialEmail,
             phoneNumber: businessData.phoneNumber,
             businessType: businessData.businessType,
             gstNumber: businessData.gstNumber,
+            isFssaiRegistered: businessData.isFssaiRegistered,
+            fssaiNumber: businessData.fssaiNumber,
             address: businessData.address,
             logoUrl: logoUrl,
             createdAt: businessData.createdAt,
@@ -157,9 +170,12 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isNewSetup = ref.watch(currentBusinessProvider).value == null;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Business Setup'),
+        title: Text(isNewSetup ? 'Business Setup' : 'Edit Business'),
+        automaticallyImplyLeading: !isNewSetup,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -258,7 +274,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
               const SizedBox(height: 16),
 
               DropdownButtonFormField<String>(
-                value: _selectedType,
+                initialValue: _selectedType,
                 decoration: const InputDecoration(labelText: 'Business Type*'),
                 items: _businessTypes
                     .map((type) => DropdownMenuItem(value: type, child: Text(type)))
@@ -299,6 +315,36 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                 ),
               ],
 
+              const SizedBox(height: 24),
+
+              SwitchListTile(
+                title: const Text('FSSAI Registered?'),
+                subtitle: const Text('Required for cafés, restaurants, and food businesses'),
+                value: _isFssaiRegistered,
+                onChanged: (value) => setState(() => _isFssaiRegistered = value),
+                contentPadding: EdgeInsets.zero,
+              ),
+
+              if (_isFssaiRegistered) ...[
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _fssaiController,
+                  decoration: const InputDecoration(
+                    labelText: 'FSSAI License Number*',
+                    hintText: '14-digit numeric value',
+                  ),
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (!_isFssaiRegistered) return null;
+                    if (value == null || value.isEmpty) return 'Required if FSSAI enabled';
+                    if (value.length != 14 || !RegExp(r'^\d+$').hasMatch(value)) {
+                      return 'Enter valid 14-digit FSSAI number';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+
               const SizedBox(height: 40),
               FilledButton(
                 onPressed: _isLoading ? null : _submit,
@@ -307,17 +353,6 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                     : const Text('Complete Setup'),
               ),
               const SizedBox(height: 16),
-              TextButton(
-                onPressed: () {
-                  // Skip for now logic: Could just set a flag in user profile
-                  // or create a minimal business entry.
-                  // For now, let's just show a message or treat it as "Later"
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please complete basic details to continue.')),
-                  );
-                },
-                child: const Text('Skip for now', style: TextStyle(color: Colors.grey)),
-              ),
             ],
           ),
         ),

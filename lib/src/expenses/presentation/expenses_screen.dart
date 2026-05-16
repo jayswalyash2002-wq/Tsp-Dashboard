@@ -588,7 +588,7 @@ class _AddFundsSheetState extends ConsumerState<_AddFundsSheet> {
   void initState() {
     super.initState();
     _type = widget.initialType;
-    _selectedReason = _reasons[0];
+    _selectedReason = _reasons.isNotEmpty ? _reasons[0] : '';
   }
 
   @override

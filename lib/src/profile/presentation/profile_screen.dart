@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,7 +8,6 @@ import '../../core/firebase/firebase_providers.dart';
 import '../../core/utils/business_date_utils.dart';
 import '../../dashboard/data/dashboard_providers.dart';
 import '../../business/data/business_providers.dart';
-import '../../business/domain/business.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -37,13 +35,13 @@ class ProfileScreen extends ConsumerWidget {
                       radius: 30,
                       backgroundColor: Theme.of(context).colorScheme.primary,
                       child: Text(
-                        (profile?['displayName'] ?? user?.email ?? '?')[0].toUpperCase(),
+                        _getAvatarLetter(profile?.displayName, user?.email),
                         style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                       ),
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      profile?['displayName'] ?? 'User',
+                      profile?.displayName ?? 'User',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                     ),
@@ -63,24 +61,28 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             const _BusinessStatusCard(),
             const SizedBox(height: 24),
-            _Tile(
-              title: 'Edit menu',
-              subtitle: 'Add, edit, disable items',
-              onTap: () => context.push('/edit-menu'),
-            ),
-            const SizedBox(height: 10),
-            _Tile(
-              title: 'Sales reports',
-              subtitle: 'Weekly and monthly sales performance',
-              onTap: () => context.push('/sales-reports'),
-            ),
-            const SizedBox(height: 10),
-            _Tile(
-              title: 'Expense reports',
-              subtitle: 'Monthly expense breakdown',
-              onTap: () => context.push('/expense-reports'),
-            ),
-            const SizedBox(height: 10),
+            if (profile?.permissions.canManageInventory ?? false) ...[
+              _Tile(
+                title: 'Edit menu',
+                subtitle: 'Add, edit, disable items',
+                onTap: () => context.push('/edit-menu'),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (profile?.permissions.canViewReports ?? false) ...[
+              _Tile(
+                title: 'Sales reports',
+                subtitle: 'Weekly and monthly sales performance',
+                onTap: () => context.push('/sales-reports'),
+              ),
+              const SizedBox(height: 10),
+              _Tile(
+                title: 'Expense reports',
+                subtitle: 'Monthly expense breakdown',
+                onTap: () => context.push('/expense-reports'),
+              ),
+              const SizedBox(height: 10),
+            ],
             _Tile(
               title: 'Device settings',
               subtitle: 'Device: ${deviceName ?? "Not set"}',
@@ -89,7 +91,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 10),
             _Tile(
               title: 'Account info',
-              subtitle: 'Created: ${profile?['createdAt'] != null ? (profile!['createdAt'] as Timestamp).toDate().toString().split(' ')[0] : "Recently"}',
+              subtitle: 'Role: ${profile?.role.name.toUpperCase() ?? "Loading..."}',
               onTap: () {},
             ),
             const SizedBox(height: 24),
@@ -113,6 +115,16 @@ class ProfileScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  String _getAvatarLetter(String? displayName, String? email) {
+    if (displayName != null && displayName.trim().isNotEmpty) {
+      return displayName.trim()[0].toUpperCase();
+    }
+    if (email != null && email.trim().isNotEmpty) {
+      return email.trim()[0].toUpperCase();
+    }
+    return '?';
   }
 }
 
@@ -169,15 +181,16 @@ class _BusinessIdentityCard extends ConsumerWidget {
                 if (business.isGstRegistered)
                   _InfoRow(label: 'GSTIN', value: business.gstNumber!, isVertical: true),
                 const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: () => context.push('/business-setup'),
-                  icon: const Icon(Icons.edit, size: 16),
-                  label: const Text('Edit Business Details'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(40),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                if (ref.watch(permissionsProvider)?.canManageBusiness ?? false)
+                  OutlinedButton.icon(
+                    onPressed: () => context.push('/business-setup'),
+                    icon: const Icon(Icons.edit, size: 16),
+                    label: const Text('Edit Business Details'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(40),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
-                ),
               ],
             ),
           ),

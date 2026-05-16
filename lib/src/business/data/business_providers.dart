@@ -18,7 +18,7 @@ final businessRepositoryProvider = Provider<BusinessRepository>((ref) {
 
 final userBusinessIdProvider = Provider<String?>((ref) {
   final profile = ref.watch(userProfileProvider).value;
-  return profile?['businessId'] as String?;
+  return profile?.businessId;
 });
 
 final currentBusinessProvider = StreamProvider<Business?>((ref) {

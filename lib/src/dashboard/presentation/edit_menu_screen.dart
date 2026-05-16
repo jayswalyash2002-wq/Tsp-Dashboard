@@ -42,8 +42,8 @@ class EditMenuScreen extends ConsumerWidget {
           // 3. Sort categories by their first item's categorySortOrder.
           final sortedCategories = grouped.keys.toList()
             ..sort((a, b) {
-              final orderA = grouped[a]!.first.categorySortOrder;
-              final orderB = grouped[b]!.first.categorySortOrder;
+              final orderA = grouped[a]?.firstOrNull?.categorySortOrder ?? 0;
+              final orderB = grouped[b]?.firstOrNull?.categorySortOrder ?? 0;
               return orderA.compareTo(orderB);
             });
 

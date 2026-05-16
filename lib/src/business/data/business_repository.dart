@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../domain/business.dart';
@@ -8,6 +9,27 @@ class BusinessRepository {
   final FirebaseStorage _storage;
 
   BusinessRepository(this._db, this._storage);
+
+  String _generateUIN() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude ambiguous chars like O, 0, I, 1
+    final rnd = Random();
+    final code = String.fromCharCodes(Iterable.generate(
+      6,
+      (_) => chars.codeUnitAt(rnd.nextInt(chars.length)),
+    ));
+    return 'TSP-$code';
+  }
+
+  Future<String> _generateUniqueUIN() async {
+    String uin;
+    bool exists;
+    do {
+      uin = _generateUIN();
+      final doc = await _db.collection('businesses').doc(uin).get();
+      exists = doc.exists;
+    } while (exists);
+    return uin;
+  }
 
   Future<Business?> getBusiness(String businessId) async {
     final doc = await _db.collection('businesses').doc(businessId).get();
@@ -27,19 +49,39 @@ class BusinessRepository {
     required String uid,
     required Business business,
   }) async {
+    final uin = await _generateUniqueUIN();
     final batch = _db.batch();
 
-    final businessRef = _db.collection('businesses').doc();
+    final businessRef = _db.collection('businesses').doc(uin);
     final userRef = _db.collection('users').doc(uid);
 
-    batch.set(businessRef, business.toMap());
-    batch.update(userRef, {
-      'businessId': businessRef.id,
-      'role': 'owner',
-    });
+    final finalBusiness = Business(
+      id: uin,
+      businessName: business.businessName,
+      ownerName: business.ownerName,
+      officialEmail: business.officialEmail,
+      phoneNumber: business.phoneNumber,
+      businessType: business.businessType,
+      gstNumber: business.gstNumber,
+      isFssaiRegistered: business.isFssaiRegistered,
+      fssaiNumber: business.fssaiNumber,
+      address: business.address,
+      logoUrl: business.logoUrl,
+      createdAt: DateTime.now(),
+    );
+
+    batch.set(businessRef, finalBusiness.toMap());
+    batch.set(
+      userRef,
+      {
+        'businessId': uin,
+        'role': 'admin',
+      },
+      SetOptions(merge: true),
+    );
 
     await batch.commit();
-    return businessRef.id;
+    return uin;
   }
 
   Future<String?> uploadLogo(String businessId, File file) async {

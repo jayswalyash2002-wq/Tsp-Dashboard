@@ -30,6 +30,11 @@ final ordersProvider = StreamProvider<List<SavedOrder>>((ref) async* {
   yield* repo.watchOrders();
 });
 
+final activeKitchenOrdersProvider = StreamProvider<List<SavedOrder>>((ref) async* {
+  final repo = await ref.watch(orderRepositoryProvider.future);
+  yield* repo.watchActiveKitchenOrders();
+});
+
 final sessionRepositoryProvider = Provider<SessionRepository>((ref) {
   return SessionRepository(ref.watch(firestoreProvider));
 });

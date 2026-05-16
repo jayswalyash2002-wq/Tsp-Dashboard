@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/device/device_providers.dart';
 import '../../core/firebase/firebase_providers.dart';
 import '../../core/storage/prefs.dart';
+import '../domain/app_user.dart';
 import 'auth_repository.dart';
 
 final authRepositoryProvider = FutureProvider<AuthRepository>((ref) async {
@@ -21,12 +22,17 @@ final deviceNameProvider = StateProvider<String?>((ref) {
   return prefs?.getString(PrefKeys.deviceName);
 });
 
-final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
+final userProfileProvider = StreamProvider<AppUser?>((ref) async* {
   final user = ref.watch(authStateChangesProvider).value;
   if (user == null) {
     yield null;
   } else {
     final repo = await ref.watch(authRepositoryProvider.future);
-    yield* repo.watchUserProfile(user.uid);
+    yield* repo.watchUserProfile(user.uid).map((map) => map != null ? AppUser.fromMap(map) : null);
   }
+});
+
+final permissionsProvider = Provider<AppPermissions?>((ref) {
+  final user = ref.watch(userProfileProvider).value;
+  return user?.permissions;
 });

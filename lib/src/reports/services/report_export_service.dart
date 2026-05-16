@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
@@ -63,7 +63,7 @@ class ReportExportService {
             } catch (e) {
               // If writing to saved directory fails (e.g. Scoped Storage restriction)
               // we proceed to the picker or fallback.
-              print('Failed to write to saved directory: $e');
+              debugPrint('Failed to write to saved directory: $e');
             }
           }
         }

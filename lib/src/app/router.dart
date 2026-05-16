@@ -44,66 +44,69 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
-      GoRoute(
-        path: '/edit-menu',
-        builder: (context, state) => const EditMenuScreen(),
-      ),
-      GoRoute(
-        path: '/sales-reports',
-        builder: (context, state) => const SalesReportsScreen(),
-      ),
-      GoRoute(
-        path: '/expense-reports',
-        builder: (context, state) => const ExpenseReportsScreen(),
-      ),
-      GoRoute(
-        path: '/business-setup',
-        builder: (context, state) => const BusinessSetupScreen(),
-      ),
-      StatefulShellRoute.indexedStack(
-        builder: (context, state, navigationShell) {
-          return AuthGate(
-            child: ShellScaffold(navigationShell: navigationShell),
-          );
-        },
-        branches: [
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/dashboard',
-                pageBuilder: (context, state) => const NoTransitionPage(
-                  child: DashboardScreen(),
-                ),
-              ),
-            ],
+      ShellRoute(
+        builder: (context, state, child) => AuthGate(child: child),
+        routes: [
+          GoRoute(
+            path: '/edit-menu',
+            builder: (context, state) => const EditMenuScreen(),
           ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/history',
-                pageBuilder: (context, state) => const NoTransitionPage(
-                  child: HistoryScreen(),
-                ),
-              ),
-            ],
+          GoRoute(
+            path: '/sales-reports',
+            builder: (context, state) => const SalesReportsScreen(),
           ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/expenses',
-                pageBuilder: (context, state) => const NoTransitionPage(
-                  child: ExpensesScreen(),
-                ),
-              ),
-            ],
+          GoRoute(
+            path: '/expense-reports',
+            builder: (context, state) => const ExpenseReportsScreen(),
           ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/profile',
-                pageBuilder: (context, state) => const NoTransitionPage(
-                  child: ProfileScreen(),
-                ),
+          GoRoute(
+            path: '/business-setup',
+            builder: (context, state) => const BusinessSetupScreen(),
+          ),
+          StatefulShellRoute.indexedStack(
+            builder: (context, state, navigationShell) {
+              return ShellScaffold(navigationShell: navigationShell);
+            },
+            branches: [
+              StatefulShellBranch(
+                routes: [
+                  GoRoute(
+                    path: '/dashboard',
+                    pageBuilder: (context, state) => const NoTransitionPage(
+                      child: DashboardScreen(),
+                    ),
+                  ),
+                ],
+              ),
+              StatefulShellBranch(
+                routes: [
+                  GoRoute(
+                    path: '/history',
+                    pageBuilder: (context, state) => const NoTransitionPage(
+                      child: HistoryScreen(),
+                    ),
+                  ),
+                ],
+              ),
+              StatefulShellBranch(
+                routes: [
+                  GoRoute(
+                    path: '/expenses',
+                    pageBuilder: (context, state) => const NoTransitionPage(
+                      child: ExpensesScreen(),
+                    ),
+                  ),
+                ],
+              ),
+              StatefulShellBranch(
+                routes: [
+                  GoRoute(
+                    path: '/profile',
+                    pageBuilder: (context, state) => const NoTransitionPage(
+                      child: ProfileScreen(),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

@@ -75,6 +75,8 @@ class OrderRepository {
           'email': user.email,
         },
         'deviceName': deviceName,
+        'status': OrderStatus.pending.name,
+        'createdAt': FieldValue.serverTimestamp(),
         'items': [
           for (final l in draft.lines)
             {
@@ -171,6 +173,43 @@ class OrderRepository {
         'updatedAt': FieldValue.serverTimestamp(),
       });
     });
+  }
+
+  Future<void> updateOrderStatus(String orderId, OrderStatus newStatus) async {
+    final Map<String, dynamic> updates = {
+      'status': newStatus.name,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    switch (newStatus) {
+      case OrderStatus.preparing:
+        updates['preparingAt'] = FieldValue.serverTimestamp();
+        break;
+      case OrderStatus.completed:
+        updates['completedAt'] = FieldValue.serverTimestamp();
+        break;
+      case OrderStatus.served:
+        updates['servedAt'] = FieldValue.serverTimestamp();
+        break;
+      case OrderStatus.pending:
+        break;
+    }
+
+    await _db.collection('orders').doc(orderId).update(updates);
+  }
+
+  Stream<List<SavedOrder>> watchActiveKitchenOrders() {
+    return _db
+        .collection('orders')
+        .where('status', whereIn: [
+          OrderStatus.pending.name,
+          OrderStatus.preparing.name,
+          OrderStatus.completed.name,
+        ])
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((doc) => SavedOrder.fromMap(doc.id, doc.data()))
+            .toList());
   }
 
   _Impact _calculateImpact(OrderDraft draft) {
