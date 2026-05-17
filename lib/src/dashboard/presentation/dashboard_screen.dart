@@ -8,6 +8,9 @@ import '../data/dashboard_providers.dart';
 import '../domain/menu_item.dart';
 import '../domain/order_models.dart';
 
+import '../../core/rbac/permission.dart';
+import '../../core/rbac/permission_gate.dart';
+
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -375,34 +378,41 @@ class _CurrentOrderBar extends ConsumerWidget {
               ),
               const SizedBox(width: 10),
             Expanded(
-                child: FilledButton(
-                  onPressed: (!draft.hasItems || !draft.splitValid)
-                      ? null
-                      : () async {
-                          final messenger = ScaffoldMessenger.of(context);
-                          try {
-                            await ref.read(orderControllerProvider.notifier).submit();
-                            messenger.showSnackBar(
-                              const SnackBar(content: Text('Order saved successfully')),
-                            );
-                          } catch (e) {
-                            messenger.showSnackBar(
-                              SnackBar(content: Text('Failed to save order: $e')),
-                            );
-                          }
-                        },
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
+                child: PermissionGate(
+                  permission: Permission.createOrder,
+                  fallback: const FilledButton(
+                    onPressed: null,
+                    child: Text('Unauthorized'),
                   ),
-                  child: Text(
-                    !draft.splitValid
-                        ? 'Fix split payment'
-                        : (ref.watch(orderControllerProvider).isEditing
-                            ? 'Update order'
-                            : 'Save order'),
+                  child: FilledButton(
+                    onPressed: (!draft.hasItems || !draft.splitValid)
+                        ? null
+                        : () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            try {
+                              await ref.read(orderControllerProvider.notifier).submit();
+                              messenger.showSnackBar(
+                                const SnackBar(content: Text('Order saved successfully')),
+                              );
+                            } catch (e) {
+                              messenger.showSnackBar(
+                                SnackBar(content: Text('Failed to save order: $e')),
+                              );
+                            }
+                          },
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    child: Text(
+                      !draft.splitValid
+                          ? 'Fix split payment'
+                          : (ref.watch(orderControllerProvider).isEditing
+                              ? 'Update order'
+                              : 'Save order'),
+                    ),
                   ),
                 ),
               ),

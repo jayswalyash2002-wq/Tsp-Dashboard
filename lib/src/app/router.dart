@@ -16,10 +16,44 @@ import '../reports/presentation/sales_reports_screen.dart';
 import '../business/presentation/business_setup_screen.dart';
 import 'shell_scaffold.dart';
 
+import '../core/rbac/permission.dart';
+import '../core/rbac/permission_manager.dart';
+
+import '../auth/presentation/staff_management_screen.dart';
+
 final goRouterProvider = Provider<GoRouter>((ref) {
+  final permissionManager = ref.watch(permissionManagerProvider);
+
   return GoRouter(
     initialLocation: '/dashboard',
+    redirect: (context, state) {
+      final path = state.uri.path;
+
+      // Centralized Route-Permission mapping
+      final routePermissions = {
+        '/sales-reports': Permission.viewReports,
+        '/expense-reports': Permission.viewReports,
+        '/edit-menu': Permission.manageBusiness,
+        '/business-setup': Permission.manageBusiness,
+        '/expenses': Permission.manageExpenses,
+        '/staff': Permission.manageStaff,
+      };
+
+      for (final entry in routePermissions.entries) {
+        if (path.startsWith(entry.key)) {
+          if (!permissionManager.hasPermission(entry.value)) {
+            return '/dashboard'; // Safe fallback
+          }
+        }
+      }
+
+      return null;
+    },
     routes: [
+      GoRoute(
+        path: '/staff',
+        builder: (context, state) => const StaffManagementScreen(),
+      ),
       GoRoute(
         path: '/auth',
         builder: (context, state) => const AuthGate(),

@@ -5,6 +5,7 @@ import '../../core/firebase/firebase_providers.dart';
 import '../../core/storage/prefs.dart';
 import '../domain/app_user.dart';
 import 'auth_repository.dart';
+import 'staff_repository.dart';
 
 final authRepositoryProvider = FutureProvider<AuthRepository>((ref) async {
   final auth = ref.watch(firebaseAuthProvider);
@@ -12,6 +13,17 @@ final authRepositoryProvider = FutureProvider<AuthRepository>((ref) async {
   final prefs = await ref.watch(sharedPreferencesProvider.future);
   final identity = await ref.watch(deviceIdentityProvider.future);
   return AuthRepository(auth: auth, db: db, prefs: prefs, identity: identity);
+});
+
+final staffRepositoryProvider = Provider<StaffRepository>((ref) {
+  return StaffRepository(ref.watch(firestoreProvider));
+});
+
+final staffListProvider = StreamProvider<List<AppUser>>((ref) {
+  final user = ref.watch(userProfileProvider).value;
+  if (user == null || user.businessId == null) return Stream.value([]);
+  
+  return ref.watch(staffRepositoryProvider).watchStaff(user.businessId!);
 });
 
 final deviceNameProvider = StateProvider<String?>((ref) {
@@ -30,9 +42,4 @@ final userProfileProvider = StreamProvider<AppUser?>((ref) async* {
     final repo = await ref.watch(authRepositoryProvider.future);
     yield* repo.watchUserProfile(user.uid).map((map) => map != null ? AppUser.fromMap(map) : null);
   }
-});
-
-final permissionsProvider = Provider<AppPermissions?>((ref) {
-  final user = ref.watch(userProfileProvider).value;
-  return user?.permissions;
 });

@@ -8,6 +8,8 @@ import '../../core/firebase/firebase_providers.dart';
 import '../../core/utils/business_date_utils.dart';
 import '../../dashboard/data/dashboard_providers.dart';
 import '../../business/data/business_providers.dart';
+import '../../core/rbac/permission.dart';
+import '../../core/rbac/permission_gate.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -61,28 +63,51 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             const _BusinessStatusCard(),
             const SizedBox(height: 24),
-            if (profile?.permissions.canManageInventory ?? false) ...[
-              _Tile(
-                title: 'Edit menu',
-                subtitle: 'Add, edit, disable items',
-                onTap: () => context.push('/edit-menu'),
+            PermissionGate(
+              permission: Permission.accessSettings,
+              child: Column(
+                children: [
+                  _Tile(
+                    title: 'Edit menu',
+                    subtitle: 'Add, edit, disable items',
+                    onTap: () => context.push('/edit-menu'),
+                  ),
+                  const SizedBox(height: 10),
+                ],
               ),
-              const SizedBox(height: 10),
-            ],
-            if (profile?.permissions.canViewReports ?? false) ...[
-              _Tile(
-                title: 'Sales reports',
-                subtitle: 'Weekly and monthly sales performance',
-                onTap: () => context.push('/sales-reports'),
+            ),
+            PermissionGate(
+              permission: Permission.viewReports,
+              child: Column(
+                children: [
+                  _Tile(
+                    title: 'Sales reports',
+                    subtitle: 'Weekly and monthly sales performance',
+                    onTap: () => context.push('/sales-reports'),
+                  ),
+                  const SizedBox(height: 10),
+                  _Tile(
+                    title: 'Expense reports',
+                    subtitle: 'Monthly expense breakdown',
+                    onTap: () => context.push('/expense-reports'),
+                  ),
+                  const SizedBox(height: 10),
+                ],
               ),
-              const SizedBox(height: 10),
-              _Tile(
-                title: 'Expense reports',
-                subtitle: 'Monthly expense breakdown',
-                onTap: () => context.push('/expense-reports'),
+            ),
+            PermissionGate(
+              permission: Permission.manageStaff,
+              child: Column(
+                children: [
+                  _Tile(
+                    title: 'Manage Staff',
+                    subtitle: 'Roles, access, and team members',
+                    onTap: () => context.push('/staff'),
+                  ),
+                  const SizedBox(height: 10),
+                ],
               ),
-              const SizedBox(height: 10),
-            ],
+            ),
             _Tile(
               title: 'Device settings',
               subtitle: 'Device: ${deviceName ?? "Not set"}',
@@ -181,8 +206,9 @@ class _BusinessIdentityCard extends ConsumerWidget {
                 if (business.isGstRegistered)
                   _InfoRow(label: 'GSTIN', value: business.gstNumber!, isVertical: true),
                 const SizedBox(height: 16),
-                if (ref.watch(permissionsProvider)?.canManageBusiness ?? false)
-                  OutlinedButton.icon(
+                PermissionGate(
+                  permission: Permission.accessSettings,
+                  child: OutlinedButton.icon(
                     onPressed: () => context.push('/business-setup'),
                     icon: const Icon(Icons.edit, size: 16),
                     label: const Text('Edit Business Details'),
@@ -191,6 +217,7 @@ class _BusinessIdentityCard extends ConsumerWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
+                ),
               ],
             ),
           ),
