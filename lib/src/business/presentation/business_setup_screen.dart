@@ -24,6 +24,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
   final _fssaiController = TextEditingController();
   
   String? _selectedType;
+  String? _selectedCity;
   bool _isGstRegistered = false;
   bool _isFssaiRegistered = false;
   File? _logoFile;
@@ -38,6 +39,16 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
     'Cloud Kitchen',
     'Beverage Bar',
     'Dessert Shop',
+    'Other',
+  ];
+
+  final List<String> _cities = [
+    'Ahmedabad',
+    'Mumbai',
+    'Delhi',
+    'Surat',
+    'Pune',
+    'Bangalore',
     'Other',
   ];
 
@@ -59,6 +70,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
         _gstController.text = business.gstNumber ?? '';
         _fssaiController.text = business.fssaiNumber ?? '';
         _selectedType = _businessTypes.contains(business.businessType) ? business.businessType : 'Other';
+        _selectedCity = _cities.contains(business.city) ? business.city : (business.city != null ? 'Other' : null);
         _isGstRegistered = business.isGstRegistered;
         _isFssaiRegistered = business.isFssaiRegistered;
         _existingLogoUrl = business.logoUrl;
@@ -108,11 +120,13 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
       
       final businessData = Business(
         id: existingBusiness?.id ?? '',
+        uin: existingBusiness?.uin ?? '',
         businessName: _nameController.text.trim(),
         ownerName: profile?.displayName ?? 'Owner',
         officialEmail: _emailController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
         businessType: _selectedType ?? 'Other',
+        city: _selectedCity,
         gstNumber: _isGstRegistered ? _gstController.text.trim() : null,
         isFssaiRegistered: _isFssaiRegistered,
         fssaiNumber: _isFssaiRegistered ? _fssaiController.text.trim() : null,
@@ -121,32 +135,19 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
         createdAt: existingBusiness?.createdAt ?? DateTime.now(),
       );
 
-      String businessId;
+      Business finalBusinessData;
       if (existingBusiness == null) {
-        businessId = await repo.createBusiness(uid: user.uid, business: businessData);
+        finalBusinessData = await repo.createBusiness(uid: user.uid, business: businessData);
       } else {
-        businessId = existingBusiness.id;
+        finalBusinessData = businessData;
         await repo.updateBusiness(businessData);
       }
       
       if (_logoFile != null) {
-        logoUrl = await repo.uploadLogo(businessId, _logoFile!);
+        logoUrl = await repo.uploadLogo(finalBusinessData.id, _logoFile!);
         if (logoUrl != null) {
-          final finalBusiness = Business(
-            id: businessId,
-            businessName: businessData.businessName,
-            ownerName: businessData.ownerName,
-            officialEmail: businessData.officialEmail,
-            phoneNumber: businessData.phoneNumber,
-            businessType: businessData.businessType,
-            gstNumber: businessData.gstNumber,
-            isFssaiRegistered: businessData.isFssaiRegistered,
-            fssaiNumber: businessData.fssaiNumber,
-            address: businessData.address,
-            logoUrl: logoUrl,
-            createdAt: businessData.createdAt,
-          );
-          await repo.updateBusiness(finalBusiness);
+          finalBusinessData = finalBusinessData.copyWith(logoUrl: logoUrl);
+          await repo.updateBusiness(finalBusinessData);
         }
       }
 
@@ -280,6 +281,20 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                     .map((type) => DropdownMenuItem(value: type, child: Text(type)))
                     .toList(),
                 onChanged: (value) => setState(() => _selectedType = value),
+                validator: (value) => value == null ? 'Required' : null,
+              ),
+              const SizedBox(height: 16),
+
+              DropdownButtonFormField<String>(
+                value: _selectedCity,
+                decoration: const InputDecoration(
+                  labelText: 'Business City*',
+                  hintText: 'Select city for UIN generation',
+                ),
+                items: _cities
+                    .map((city) => DropdownMenuItem(value: city, child: Text(city)))
+                    .toList(),
+                onChanged: (value) => setState(() => _selectedCity = value),
                 validator: (value) => value == null ? 'Required' : null,
               ),
               const SizedBox(height: 16),

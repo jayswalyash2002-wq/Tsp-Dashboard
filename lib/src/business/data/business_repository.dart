@@ -1,8 +1,8 @@
 import 'dart:io';
-import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../domain/business.dart';
+import '../../core/utils/uin_generator.dart';
 
 class BusinessRepository {
   final FirebaseFirestore _db;
@@ -10,23 +10,13 @@ class BusinessRepository {
 
   BusinessRepository(this._db, this._storage);
 
-  String _generateUIN() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude ambiguous chars like O, 0, I, 1
-    final rnd = Random();
-    final code = String.fromCharCodes(Iterable.generate(
-      6,
-      (_) => chars.codeUnitAt(rnd.nextInt(chars.length)),
-    ));
-    return 'TSP-$code';
-  }
-
-  Future<String> _generateUniqueUIN() async {
+  Future<String> _generateUniqueUIN({String? city}) async {
     String uin;
     bool exists;
     do {
-      uin = _generateUIN();
-      final doc = await _db.collection('businesses').doc(uin).get();
-      exists = doc.exists;
+      uin = UINGenerator.generateBusinessUIN(city: city);
+      final snap = await _db.collection('businesses').where('uin', isEqualTo: uin).get();
+      exists = snap.docs.isNotEmpty;
     } while (exists);
     return uin;
   }
@@ -45,18 +35,22 @@ class BusinessRepository {
         .map((doc) => doc.exists ? Business.fromMap(doc.data()!, doc.id) : null);
   }
 
-  Future<String> createBusiness({
+  Future<Business> createBusiness({
     required String uid,
     required Business business,
   }) async {
-    final uin = await _generateUniqueUIN();
-    final batch = _db.batch();
-
-    final businessRef = _db.collection('businesses').doc(uin);
+    // 1. Generate a unique human-readable UIN using the selected city
+    final uin = await _generateUniqueUIN(city: business.city);
+    
+    // 2. Use a standard Firestore ID for the document
+    final businessRef = _db.collection('businesses').doc();
+    final businessId = businessRef.id;
+    
     final userRef = _db.collection('users').doc(uid);
 
     final finalBusiness = Business(
-      id: uin,
+      id: businessId,
+      uin: uin,
       businessName: business.businessName,
       ownerName: business.ownerName,
       officialEmail: business.officialEmail,
@@ -70,18 +64,19 @@ class BusinessRepository {
       createdAt: DateTime.now(),
     );
 
+    final batch = _db.batch();
     batch.set(businessRef, finalBusiness.toMap());
     batch.set(
       userRef,
       {
-        'businessId': uin,
+        'businessId': businessId,
         'role': 'admin',
       },
       SetOptions(merge: true),
     );
 
     await batch.commit();
-    return uin;
+    return finalBusiness;
   }
 
   Future<String?> uploadLogo(String businessId, File file) async {

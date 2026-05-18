@@ -198,7 +198,8 @@ class _BusinessIdentityCard extends ConsumerWidget {
                     ),
                   ],
                 ),
-                const Divider(height: 24),
+                                const Divider(height: 24),
+                _InfoRow(label: 'UIN', value: business.uin),
                 _InfoRow(label: 'Email', value: business.officialEmail, isVertical: true),
                 _InfoRow(label: 'Phone', value: business.phoneNumber),
                 if (business.address != null)
