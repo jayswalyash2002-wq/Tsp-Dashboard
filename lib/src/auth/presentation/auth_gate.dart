@@ -8,12 +8,19 @@ import '../data/auth_repository.dart';
 import '../domain/app_user.dart';
 import 'device_name_screen.dart';
 import 'login_screen.dart';
+import 'intent_selection_screen.dart';
+import '../../memberships/data/membership_providers.dart';
+import '../../memberships/domain/membership.dart';
+import '../../memberships/presentation/no_business_access_screen.dart';
+import '../../memberships/presentation/business_selector_screen.dart';
 import '../../business/presentation/business_setup_screen.dart';
 
 enum _AppState {
   loading,
+  intentSelection,
   login,
-  onboarding,
+  businessSetup, // Step 2
+  selectBusiness,
   deviceSetup,
   ready,
   error,
@@ -55,23 +62,35 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateChangesProvider);
-    final userProfileAsync = ref.watch(userProfileProvider);
+    final membershipsAsync = ref.watch(userMembershipsProvider);
+    final session = ref.watch(sessionProvider);
     final deviceName = ref.watch(deviceNameProvider);
     final authRepoAsync = ref.watch(authRepositoryProvider);
+    final userProfileAsync = ref.watch(userProfileProvider);
 
     final state = _determineState(
       authState: authState,
-      profileAsync: userProfileAsync,
+      membershipsAsync: membershipsAsync,
+      session: session,
       deviceName: deviceName,
+      profileAsync: userProfileAsync,
     );
+
+    if (session.businessId != null) {
+      debugPrint('AUTH_GATE: Active Session detected for Business: ${session.businessId}');
+    }
 
     switch (state) {
       case _AppState.loading:
         return const _BlockingLoader();
+      case _AppState.intentSelection:
+        return const IntentSelectionScreen();
       case _AppState.login:
         return const LoginScreen();
-      case _AppState.onboarding:
+      case _AppState.businessSetup:
         return const BusinessSetupScreen();
+      case _AppState.selectBusiness:
+        return BusinessSelectorScreen(memberships: membershipsAsync.value!);
       case _AppState.deviceSetup:
         return const DeviceNameScreen();
       case _AppState.ready:
@@ -89,30 +108,78 @@ class _AuthGateState extends ConsumerState<AuthGate> {
           error: (e, _) => _BlockingError(message: e.toString()),
         );
       case _AppState.error:
-        final error = authState.error ?? userProfileAsync.error;
+        final error = authState.error ?? membershipsAsync.error ?? userProfileAsync.error;
         return _BlockingError(message: error.toString());
     }
   }
 
   _AppState _determineState({
     required AsyncValue<User?> authState,
-    required AsyncValue<AppUser?> profileAsync,
+    required AsyncValue<List<Membership>> membershipsAsync,
+    required SessionState session,
     required String? deviceName,
+    required AsyncValue<AppUser?> profileAsync,
   }) {
-    if (authState.isLoading || profileAsync.isLoading) return _AppState.loading;
-    if (authState.hasError || profileAsync.hasError) return _AppState.error;
-
-    final user = authState.value;
-    if (user == null) return _AppState.login;
-
-    final profile = profileAsync.value;
-    if (profile == null || profile.businessId == null || profile.businessId!.isEmpty) {
-      return _AppState.onboarding;
+    if (authState.isLoading || membershipsAsync.isLoading || profileAsync.isLoading) {
+      return _AppState.loading;
+    }
+    
+    if (authState.hasError || membershipsAsync.hasError || profileAsync.hasError) {
+      return _AppState.error;
     }
 
+    final user = authState.value;
+    if (user == null) {
+      debugPrint('AUTH_GATE: No Firebase User found. Redirecting to Intent Selection.');
+      // Clear session on logout
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ref.read(sessionProvider).businessId != null) {
+          ref.read(sessionProvider.notifier).clear();
+        }
+      });
+      return _AppState.intentSelection;
+    }
+
+    debugPrint('AUTH_GATE: Firebase User authenticated: ${user.uid}');
+
+    final memberships = membershipsAsync.value ?? [];
+    
+    // Auth Resolution Flow
+    
+    // CASE A — empty result (no active memberships)
+    if (memberships.isEmpty) {
+      debugPrint('AUTH_GATE: No memberships found for UID: ${user.uid}. Routing to Business Setup (Step 2)');
+      return _AppState.businessSetup;
+    }
+
+    // CASE B & C: Resolution
+    if (session.businessId == null) {
+      if (memberships.length == 1) {
+        // CASE B: Single membership -> auto-resolve
+        final m = memberships.first;
+        debugPrint('AUTH_GATE: Auto-resolving business ${m.businessId} with role ${m.role.name}');
+        
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(sessionProvider.notifier).setSession(
+            businessId: m.businessId,
+            userUid: user.uid,
+            role: m.role,
+            membershipId: m.membershipId,
+            branchId: m.branchId,
+          );
+        });
+        return _AppState.loading;
+      } else {
+        // CASE C: Multiple memberships -> show selector
+        debugPrint('AUTH_GATE: Multiple memberships (${memberships.length}). Showing selector.');
+        return _AppState.selectBusiness;
+      }
+    }
+
+    // Device Setup logic
     if (deviceName == null || deviceName.trim().isEmpty) {
-      // Auto-set device name from profile if possible
-      if (profile.displayName.trim().isNotEmpty) {
+      final profile = profileAsync.value;
+      if (profile != null && profile.displayName.trim().isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           final repo = await ref.read(authRepositoryProvider.future);
           await repo.setLocalDeviceName(profile.displayName);
@@ -158,4 +225,3 @@ class _BlockingError extends StatelessWidget {
     );
   }
 }
-

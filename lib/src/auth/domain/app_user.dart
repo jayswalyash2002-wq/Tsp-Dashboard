@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../../core/rbac/role.dart';
 import '../../core/rbac/permission.dart';
 
@@ -24,11 +25,18 @@ class AppUser {
   bool hasPermission(Permission permission) => roleType.permissions.contains(permission);
 
   factory AppUser.fromMap(Map<String, dynamic> map) {
+    final roleStr = map['role'] as String?;
+    if (roleStr == null) {
+      debugPrint('APP_USER: Missing role in Firestore document for UID ${map['uid']}. Relying on Membership-based session role.');
+    } else {
+      debugPrint('APP_USER: Legacy role found in Firestore: $roleStr');
+    }
+    
     return AppUser(
       uid: map['uid'] ?? '',
       email: map['email'] ?? '',
       displayName: map['displayName'] ?? '',
-      roleType: RoleType.fromString(map['role'] ?? 'cashier'),
+      roleType: roleStr != null ? RoleType.fromString(roleStr) : RoleType.cashier,
       businessId: map['businessId'],
       isActive: map['isActive'] ?? true,
     );

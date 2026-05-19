@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../domain/business.dart';
@@ -71,46 +72,76 @@ class BusinessRepository {
         });
   }
 
+  Future<List<Business>> softDuplicateCheck({
+    required String name,
+    required String city,
+  }) async {
+    final query = await _db
+        .collection('businesses')
+        .where('city', isEqualTo: city)
+        .where('businessName', isGreaterThanOrEqualTo: name)
+        .where('businessName', isLessThanOrEqualTo: '$name\uf8ff')
+        .get();
+
+    return query.docs
+        .map((doc) => Business.fromMap(doc.data(), doc.id))
+        .toList();
+  }
+
   Future<Business> createBusiness({
     required String uid,
     required Business business,
   }) async {
     // 1. Generate permanent Display UIN
-    final uin = await _generateDisplayUIN(type: 'BIZ');
+    final sequence = await _getNextSequence('biz');
+    final uin = UINGenerator.generateUIN(type: 'BIZ', sequence: sequence);
     
-    // 2. Internal UUID is handled by Firestore auto-ID
+    // 2. Pre-generate document IDs for atomic safety
     final businessRef = _db.collection('businesses').doc();
     final businessId = businessRef.id;
     
-    final userRef = _db.collection('users').doc(uid);
+    final membershipRef = _db.collection('memberships').doc();
+    final settingsRef = _db.collection('settings').doc(businessId);
 
-    final finalBusiness = Business(
+    final finalBusiness = business.copyWith(
       id: businessId,
       uin: uin,
-      businessName: business.businessName,
-      ownerName: business.ownerName,
-      officialEmail: business.officialEmail,
-      phoneNumber: business.phoneNumber,
-      businessType: business.businessType,
-      city: business.city,
-      gstNumber: business.gstNumber,
-      isFssaiRegistered: business.isFssaiRegistered,
-      fssaiNumber: business.fssaiNumber,
-      address: business.address,
-      logoUrl: business.logoUrl,
-      createdAt: DateTime.now(),
+      createdAt: DateTime.now(), // Fallback, server timestamp used in map
     );
 
     final batch = _db.batch();
-    batch.set(businessRef, finalBusiness.toCreateMap());
-    batch.set(
-      userRef,
-      {
-        'businessId': businessId,
-        'role': 'admin',
-      },
-      SetOptions(merge: true),
-    );
+    
+    debugPrint('BUSINESS_REPO: Creating business $businessId and FIRST owner membership for $uid');
+    
+    // Operation 1: Create business document
+    batch.set(businessRef, {
+      ...finalBusiness.toMap(),
+      'createdAt': FieldValue.serverTimestamp(),
+      'createdBy': uid,
+      'status': 'active',
+    });
+    
+    // Operation 2: Create FIRST owner membership
+    batch.set(membershipRef, {
+      'uid': uid,
+      'businessId': businessId,
+      'branchId': null,
+      'role': 'owner',
+      'status': 'active',
+      'createdAt': FieldValue.serverTimestamp(),
+      'createdBy': uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': uid,
+    });
+
+    // Operation 3: Create business settings
+    batch.set(settingsRef, {
+      'businessId': businessId,
+      'currency': 'INR',
+      'timezone': 'Asia/Kolkata',
+      'taxEnabled': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
 
     await batch.commit();
     return finalBusiness;

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../dashboard/domain/order_models.dart';
@@ -19,24 +20,32 @@ class ExpenseRepository {
   final String _businessId;
 
   Stream<List<Expense>> watchExpenses() {
+    debugPrint('EXPENSE_REPO: Watching expenses for businessId: $_businessId');
     return _db
         .collection('expenses')
         .where('businessId', isEqualTo: _businessId)
         .orderBy('timestamp', descending: true)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => Expense.fromMap(doc.id, doc.data()))
-            .toList());
+        .map((snap) {
+      final items = snap.docs
+          .map((doc) => Expense.fromMap(doc.id, doc.data()))
+          .toList();
+      
+      // Strict client-side isolation filter
+      return items.where((e) => e.businessId == _businessId).toList();
+    });
   }
 
   Future<void> saveExpense(Expense expense) async {
-    final user = _auth.currentUser;
-    if (user == null) throw StateError('Not signed in');
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) throw StateError('Not signed in');
 
     final isNew = expense.id.isEmpty;
     final expenseId = isNew ? const Uuid().v4() : expense.id;
     final expenseRef = _db.collection('expenses').doc(expenseId);
     final balancesRef = _db.collection('balances').doc(_businessId);
+
+    debugPrint('EXPENSE_REPO: Saving expense $expenseId (new: $isNew) for businessId: $_businessId');
 
     await _db.runTransaction((tx) async {
       // 1. READS
@@ -45,7 +54,16 @@ class ExpenseRepository {
       if (!isNew) {
         final expenseSnap = await tx.get(expenseRef);
         if (expenseSnap.exists) {
-          oldExpense = Expense.fromMap(expenseSnap.id, expenseSnap.data()!);
+          final data = expenseSnap.data()!;
+          final existingBusinessId = data['businessId']?.toString();
+          
+          if (existingBusinessId != _businessId) {
+            debugPrint('CRITICAL: Blocked unauthorized expense update attempt. '
+                'Expected: $_businessId, Found: $existingBusinessId');
+            throw Exception('Access Denied: Business ownership mismatch');
+          }
+          
+          oldExpense = Expense.fromMap(expenseSnap.id, data);
         }
       }
 
@@ -72,9 +90,14 @@ class ExpenseRepository {
 
       // 3. WRITES
       tx.set(expenseRef, {
-        ...expense.copyWith(id: expenseId).toMap(),
+        ...expense.toMap(),
+        'id': expenseId, // Ensure ID consistency
         'businessId': _businessId,
+        'updatedBy': uid,
+        'updatedAt': FieldValue.serverTimestamp(),
+        if (isNew) 'createdAt': FieldValue.serverTimestamp(),
       });
+      
       tx.set(
         balancesRef,
         {
@@ -92,8 +115,22 @@ class ExpenseRepository {
     final expenseRef = _db.collection('expenses').doc(expense.id);
     final balancesRef = _db.collection('balances').doc(_businessId);
 
+    debugPrint('EXPENSE_REPO: Deleting expense ${expense.id} for businessId: $_businessId');
+
     await _db.runTransaction((tx) async {
-      // 1. READS
+      // 1. READS & VALIDATION
+      final expenseSnap = await tx.get(expenseRef);
+      if (!expenseSnap.exists) return; // Already gone
+      
+      final expenseData = expenseSnap.data()!;
+      final existingBusinessId = expenseData['businessId']?.toString();
+      
+      if (existingBusinessId != _businessId) {
+        debugPrint('CRITICAL: Blocked unauthorized expense delete attempt. '
+            'Expected: $_businessId, Found: $existingBusinessId');
+        throw Exception('Access Denied: Business ownership mismatch');
+      }
+
       final balancesSnap = await tx.get(balancesRef);
       
       // 2. CALCULATE BALANCES
@@ -101,11 +138,13 @@ class ExpenseRepository {
       int cash = data['cashBalancePaise'] ?? 0;
       int bank = data['bankBalancePaise'] ?? 0;
 
+      final actualExpense = Expense.fromMap(expenseSnap.id, expenseData);
+
       // Restore balance
-      if (expense.paymentMethod == PaymentMethod.cash) {
-        cash += expense.amountPaise;
+      if (actualExpense.paymentMethod == PaymentMethod.cash) {
+        cash += actualExpense.amountPaise;
       } else {
-        bank += expense.amountPaise;
+        bank += actualExpense.amountPaise;
       }
 
       // 3. WRITES

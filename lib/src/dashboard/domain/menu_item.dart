@@ -7,6 +7,7 @@ class MenuItem {
     required this.available,
     this.sortOrder = 0,
     this.categorySortOrder = 0,
+    this.businessId,
   });
 
   final String id;
@@ -16,6 +17,7 @@ class MenuItem {
   final bool available;
   final int sortOrder;
   final int categorySortOrder;
+  final String? businessId;
 
   double get price => pricePaise / 100.0;
 
@@ -30,6 +32,7 @@ class MenuItem {
       available: (data['available'] ?? true) == true,
       sortOrder: data['sortOrder'] ?? 0,
       categorySortOrder: data['categorySortOrder'] ?? 0,
+      businessId: data['businessId']?.toString(),
     );
   }
 }

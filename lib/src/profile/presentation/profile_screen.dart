@@ -8,6 +8,7 @@ import '../../core/firebase/firebase_providers.dart';
 import '../../core/utils/business_date_utils.dart';
 import '../../dashboard/data/dashboard_providers.dart';
 import '../../business/data/business_providers.dart';
+import '../../memberships/data/membership_providers.dart';
 import '../../core/rbac/permission.dart';
 import '../../core/rbac/permission_gate.dart';
 
@@ -108,16 +109,37 @@ class ProfileScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            Consumer(
+              builder: (context, ref, child) {
+                final businessId = ref.watch(userBusinessIdProvider);
+                if (businessId == null) return const SizedBox.shrink();
+                return Column(
+                  children: [
+                    _Tile(
+                      title: 'Data Migration',
+                      subtitle: 'Fix missing business data from old app version',
+                      onTap: () => _runMigration(context, ref, businessId),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                );
+              },
+            ),
             _Tile(
               title: 'Device settings',
               subtitle: 'Device: ${deviceName ?? "Not set"}',
               onTap: () {},
             ),
             const SizedBox(height: 10),
-            _Tile(
-              title: 'Account info',
-              subtitle: 'Role: ${profile?.role.name.toUpperCase() ?? "Loading..."}',
-              onTap: () {},
+            Consumer(
+              builder: (context, ref, child) {
+                final session = ref.watch(sessionProvider);
+                return _Tile(
+                  title: 'Account info',
+                  subtitle: 'Role: ${session.role?.name.toUpperCase() ?? "Loading..."}',
+                  onTap: () {},
+                );
+              },
             ),
             const SizedBox(height: 24),
             FilledButton.tonal(
@@ -150,6 +172,39 @@ class ProfileScreen extends ConsumerWidget {
       return email.trim()[0].toUpperCase();
     }
     return '?';
+  }
+
+  Future<void> _runMigration(BuildContext context, WidgetRef ref, String businessId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Run Data Migration?'),
+        content: const Text(
+          'This will scan your records and link them to this business. '
+          'Only run this if you are missing orders or menu items from the previous version.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Run Migration')),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final repo = ref.read(dataMigrationRepositoryProvider);
+      final count = await repo.migrateLegacyData(businessId);
+      
+      messenger.showSnackBar(
+        SnackBar(content: Text('Migration complete! Fixed $count records.')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Migration failed: $e')),
+      );
+    }
   }
 }
 

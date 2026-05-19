@@ -40,6 +40,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         email: _email.text,
         password: _password.text,
       );
+      
+      debugPrint('LOGIN_SCREEN: Sign in successful. Redirecting to Dashboard.');
+      if (mounted) {
+        context.go('/dashboard');
+      }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

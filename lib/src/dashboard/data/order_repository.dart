@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../auth/data/auth_repository.dart';
@@ -22,6 +23,7 @@ class OrderRepository {
   final String _businessId;
 
   Stream<List<SavedOrder>> watchOrders() {
+    debugPrint('ORDER_REPO: Watching orders for businessId: $_businessId');
     return _db
         .collection('orders')
         .where('businessId', isEqualTo: _businessId)
@@ -43,6 +45,8 @@ class OrderRepository {
 
     final orderRef = _db.collection('orders').doc(orderId);
     final balancesRef = _db.collection('balances').doc(_businessId);
+
+    debugPrint('ORDER_REPO: Saving order $orderId for businessId: $_businessId');
 
     await _db.runTransaction((tx) async {
       // 1. PERFORM ALL READS FIRST
@@ -83,6 +87,7 @@ class OrderRepository {
         'deviceName': deviceName,
         'status': OrderStatus.pending.name,
         'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
         'items': [
           for (final l in draft.lines)
             {
@@ -117,8 +122,24 @@ class OrderRepository {
     final orderRef = _db.collection('orders').doc(oldOrder.id);
     final balancesRef = _db.collection('balances').doc(_businessId);
 
+    debugPrint('ORDER_REPO: Updating order ${oldOrder.id} for businessId: $_businessId');
+
     await _db.runTransaction((tx) async {
-      // 1. PERFORM ALL READS FIRST
+      // 1. PERFORM ALL READS FIRST & VALIDATE
+      final orderSnap = await tx.get(orderRef);
+      if (!orderSnap.exists) {
+        throw Exception('Order not found');
+      }
+      
+      final orderData = orderSnap.data()!;
+      final existingBusinessId = orderData['businessId']?.toString();
+      
+      if (existingBusinessId != _businessId) {
+        debugPrint('CRITICAL: Blocked unauthorized order update attempt. '
+            'Expected: $_businessId, Found: $existingBusinessId');
+        throw Exception('Access Denied: Business ownership mismatch');
+      }
+
       final balancesSnap = await tx.get(balancesRef);
 
       // 2. PERFORM ALL WRITES
@@ -178,34 +199,53 @@ class OrderRepository {
           'splitLines': [for (final s in newOrder.splitLines) s.toMap()],
         },
         'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': _auth.currentUser?.uid,
       });
     });
   }
 
   Future<void> updateOrderStatus(String orderId, OrderStatus newStatus) async {
-    final Map<String, dynamic> updates = {
-      'status': newStatus.name,
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
+    final orderRef = _db.collection('orders').doc(orderId);
+    
+    debugPrint('ORDER_REPO: Updating order status to ${newStatus.name} for $orderId in $_businessId');
 
-    switch (newStatus) {
-      case OrderStatus.preparing:
-        updates['preparingAt'] = FieldValue.serverTimestamp();
-        break;
-      case OrderStatus.completed:
-        updates['completedAt'] = FieldValue.serverTimestamp();
-        break;
-      case OrderStatus.served:
-        updates['servedAt'] = FieldValue.serverTimestamp();
-        break;
-      case OrderStatus.pending:
-        break;
-    }
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(orderRef);
+      if (!snap.exists) throw Exception('Order not found');
+      
+      final existingBusinessId = snap.data()?['businessId']?.toString();
+      if (existingBusinessId != _businessId) {
+        debugPrint('CRITICAL: Blocked unauthorized order status update. '
+            'Expected: $_businessId, Found: $existingBusinessId');
+        throw Exception('Access Denied: Business ownership mismatch');
+      }
 
-    await _db.collection('orders').doc(orderId).update(updates);
+      final Map<String, dynamic> updates = {
+        'status': newStatus.name,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': _auth.currentUser?.uid,
+      };
+
+      switch (newStatus) {
+        case OrderStatus.preparing:
+          updates['preparingAt'] = FieldValue.serverTimestamp();
+          break;
+        case OrderStatus.completed:
+          updates['completedAt'] = FieldValue.serverTimestamp();
+          break;
+        case OrderStatus.served:
+          updates['servedAt'] = FieldValue.serverTimestamp();
+          break;
+        case OrderStatus.pending:
+          break;
+      }
+
+      tx.update(orderRef, updates);
+    });
   }
 
   Stream<List<SavedOrder>> watchActiveKitchenOrders() {
+    debugPrint('ORDER_REPO: Watching active kitchen orders for businessId: $_businessId');
     return _db
         .collection('orders')
         .where('businessId', isEqualTo: _businessId)
@@ -250,4 +290,3 @@ class _Impact {
   final int cash;
   final int bank;
 }
-

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/device/device_service.dart';
 import '../../core/storage/prefs.dart';
 import '../domain/device_session.dart';
+import 'otp_service.dart';
 
 class AuthRepository {
   AuthRepository({
@@ -13,37 +14,44 @@ class AuthRepository {
     required FirebaseFirestore db,
     required SharedPreferences prefs,
     required DeviceIdentity identity,
+    required OtpService otpService,
   })  : _auth = auth,
         _db = db,
         _prefs = prefs,
-        _identity = identity;
+        _identity = identity,
+        _otpService = otpService;
 
   final FirebaseAuth _auth;
   final FirebaseFirestore _db;
   final SharedPreferences _prefs;
   final DeviceIdentity _identity;
-  
-  // Simulated OTP storage for demonstration
-  static final Map<String, String> _tempOtps = {};
+  final OtpService _otpService;
 
   User? get currentUser => _auth.currentUser;
 
-  Future<void> sendOtp(String email) async {
-    // For development, we'll use a fixed code 123456 or generate one
-    final code = '123456'; 
-    _tempOtps[email.trim()] = code;
-    
-    debugPrint('DEBUG: OTP for $email is $code');
-    
-    // Simulate network delay
-    await Future.delayed(const Duration(seconds: 1));
+  /// Temporary Demo OTP flow (Architecture-compatible)
+  Future<void> sendOtp(
+    String phoneNumber, {
+    required void Function(String verificationId, int? resendToken) onCodeSent,
+    required void Function(Exception e) onVerificationFailed,
+  }) async {
+    try {
+      debugPrint('AUTH: Initiating Mock OTP flow for $phoneNumber');
+      final verificationId = await _otpService.sendOtp(phoneNumber);
+      onCodeSent(verificationId, null);
+    } catch (e) {
+      debugPrint('AUTH: Mock OTP failed: $e');
+      onVerificationFailed(e is Exception ? e : Exception(e.toString()));
+    }
   }
 
-  Future<bool> verifyOtp(String email, String otp) async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    // Always allow 123456 for testing
-    if (otp == '123456') return true;
-    return _tempOtps[email.trim()] == otp;
+  /// Verifies the mock OTP code.
+  Future<bool> verifyOtp({
+    required String verificationId,
+    required String smsCode,
+  }) async {
+    debugPrint('AUTH: Verifying Mock OTP code: $smsCode');
+    return await _otpService.verifyOtp(verificationId, smsCode);
   }
 
   Future<void> signInWithEmailPassword({
@@ -73,6 +81,7 @@ class AuthRepository {
     required String email,
     required String password,
     required String name,
+    required String phoneNumber,
   }) async {
     final cred = await _auth.createUserWithEmailAndPassword(
       email: email.trim(),
@@ -90,6 +99,7 @@ class AuthRepository {
       'uid': user.uid,
       'email': email.trim(),
       'displayName': name.trim(),
+      'phoneNumber': phoneNumber.trim(),
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
@@ -179,4 +189,3 @@ class AuthRepository {
     }
   }
 }
-

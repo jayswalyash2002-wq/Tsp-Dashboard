@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/data/auth_providers.dart';
 import 'permission.dart';
 
+import '../../memberships/data/membership_providers.dart';
+
 /// A service that determines if the current user has specific permissions.
 class PermissionManager {
   final Set<Permission> _userPermissions;
@@ -39,18 +41,16 @@ class UnauthorizedException implements Exception {
   String toString() => 'Access Denied: Missing ${permission.name}';
 }
 
-/// Provider that reacts to user profile changes and updates permissions.
+/// Provider that reacts to session changes and updates permissions.
 final permissionManagerProvider = Provider<PermissionManager>((ref) {
-  final profileAsync = ref.watch(userProfileProvider);
+  final session = ref.watch(sessionProvider);
   
-  return profileAsync.maybeWhen(
-    data: (user) {
-      if (user == null) return PermissionManager(permissions: {}, isLoggedIn: false);
-      return PermissionManager(
-        permissions: user.roleType.permissions,
-        isLoggedIn: true,
-      );
-    },
-    orElse: () => PermissionManager(permissions: {}, isLoggedIn: false),
+  if (session.businessId == null || session.role == null) {
+    return PermissionManager(permissions: {}, isLoggedIn: false);
+  }
+
+  return PermissionManager(
+    permissions: session.role!.permissions,
+    isLoggedIn: true,
   );
 });

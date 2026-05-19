@@ -8,6 +8,7 @@ import '../data/dashboard_providers.dart';
 import '../domain/menu_item.dart';
 import '../domain/order_models.dart';
 
+import '../../memberships/data/membership_providers.dart';
 import '../../core/rbac/permission.dart';
 import '../../core/rbac/permission_gate.dart';
 
@@ -17,13 +18,19 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(userProfileProvider);
+    final session = ref.watch(sessionProvider);
     final user = ref.watch(firebaseAuthProvider).currentUser;
     
     String userName = 'User';
     
     profileAsync.whenData((profile) {
       if (profile != null) {
-        userName = '${profile.displayName} (${profile.role.name})';
+        final roleName = session.role?.name.toUpperCase() ?? profile.role.name;
+        userName = '${profile.displayName} ($roleName)';
+        
+        if (session.isLoaded && session.role != null) {
+          debugPrint('DASHBOARD: Displaying role ${session.role!.name} for user ${profile.displayName}');
+        }
       }
     });
 
@@ -601,7 +608,7 @@ class _CompactSelect<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<T>(
-      initialValue: value,
+      value: value,
       decoration: InputDecoration(labelText: label),
       items: items.entries
           .map(

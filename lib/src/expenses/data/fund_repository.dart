@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../domain/fund_movement.dart';
 
@@ -17,6 +18,7 @@ class FundRepository {
   final String _businessId;
 
   Stream<List<FundMovement>> watchFundMovements() {
+    debugPrint('FUND_REPO: Watching fund movements for businessId: $_businessId');
     return _db
         .collection('fund_movements')
         .where('businessId', isEqualTo: _businessId)
@@ -36,6 +38,8 @@ class FundRepository {
     final movementRef = _db.collection('fund_movements').doc(id);
     final balancesRef = _db.collection('balances').doc(_businessId);
 
+    debugPrint('FUND_REPO: Adding funds ($id) for businessId: $_businessId');
+
     await _db.runTransaction((tx) async {
       // 1. READS
       final balancesSnap = await tx.get(balancesRef);
@@ -54,8 +58,11 @@ class FundRepository {
       // 3. WRITES
       tx.set(movementRef, {
         ...movement.toMap(),
+        'id': id,
         'businessId': _businessId,
+        'createdAt': FieldValue.serverTimestamp(),
       });
+
       tx.set(
         balancesRef,
         {

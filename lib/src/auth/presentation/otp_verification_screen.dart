@@ -1,12 +1,27 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../data/auth_providers.dart';
+import '../../core/firebase/firebase_providers.dart';
+import '../../memberships/data/membership_providers.dart';
 
 class OtpVerificationScreen extends ConsumerStatefulWidget {
-  const OtpVerificationScreen({super.key, required this.email});
+  const OtpVerificationScreen({
+    super.key, 
+    required this.email,
+    required this.phone,
+    required this.name,
+    required this.password,
+    required this.verificationId,
+  });
+  
   final String email;
+  final String phone;
+  final String name;
+  final String password;
+  final String verificationId;
 
   @override
   ConsumerState<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
@@ -29,27 +44,58 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
   }
 
   void _verifyOtp() async {
+    if (_busy) return;
     final otp = _controllers.map((e) => e.text).join();
-    if (otp.length < 6) return;
+    if (otp.length < 6) {
+      debugPrint('OTP: Code too short: $otp');
+      return;
+    }
+
+    if (widget.verificationId.isEmpty) {
+      debugPrint('OTP: Error - Verification ID is empty');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid verification session. Please go back and try again.')),
+      );
+      return;
+    }
 
     setState(() => _busy = true);
+    debugPrint('OTP: Starting verification for code: $otp with ID: ${widget.verificationId}');
     
     try {
       final repo = await ref.read(authRepositoryProvider.future);
-      final isValid = await repo.verifyOtp(widget.email, otp);
+      
+      // Step 1: Verify Mock OTP
+      debugPrint('OTP: Calling verifyOtp (Mock)...');
+      final isValid = await repo.verifyOtp(
+        verificationId: widget.verificationId,
+        smsCode: otp,
+      );
       
       if (!isValid) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid code. Please try again.')),
-        );
-        return;
+        throw Exception('Invalid verification code. Please try again.');
       }
+      
+      debugPrint('OTP: Verification Success.');
 
+      // Step 2: Navigate to Register Details to complete account creation
       if (!mounted) return;
       
-      context.push('/auth/details?email=${Uri.encodeComponent(widget.email)}');
+      debugPrint('OTP: Phone verified. Navigating to Register Details.');
+      
+      context.go(
+        Uri(
+          path: '/auth/register-details',
+          queryParameters: {
+            'email': widget.email,
+            'phone': widget.phone,
+            'name': widget.name,
+            'password': widget.password,
+          },
+        ).toString(),
+      );
     } catch (e) {
+      debugPrint('OTP: Error during verification: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Verification failed: $e')),
@@ -74,7 +120,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Code sent to ${widget.email}',
+              'Code sent to ${widget.phone}',
               style: TextStyle(color: Colors.grey[600]),
             ),
             const SizedBox(height: 40),

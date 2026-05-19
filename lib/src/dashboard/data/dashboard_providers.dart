@@ -13,7 +13,11 @@ import '../domain/business_session.dart';
 final menuRepositoryProvider = Provider<MenuRepository?>((ref) {
   final businessId = ref.watch(userBusinessIdProvider);
   if (businessId == null) return null;
-  return MenuRepository(ref.watch(firestoreProvider), businessId);
+  return MenuRepository(
+    ref.watch(firestoreProvider),
+    ref.watch(firebaseAuthProvider),
+    businessId,
+  );
 });
 
 final menuItemsProvider = StreamProvider<List<MenuItem>>((ref) {

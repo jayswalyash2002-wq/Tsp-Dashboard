@@ -9,12 +9,14 @@ class Business {
   final String phoneNumber;
   final String businessType;
   final String? city;
+  final String? area;
   final String? gstNumber;
   final bool isFssaiRegistered;
   final String? fssaiNumber;
   final String? address;
   final String? logoUrl;
   final DateTime createdAt;
+  final String? status;
 
   Business({
     required this.id,
@@ -25,12 +27,14 @@ class Business {
     required this.phoneNumber,
     required this.businessType,
     this.city,
+    this.area,
     this.gstNumber,
     this.isFssaiRegistered = false,
     this.fssaiNumber,
     this.address,
     this.logoUrl,
     required this.createdAt,
+    this.status = 'active',
   });
 
   bool get isGstRegistered => gstNumber != null && gstNumber!.trim().isNotEmpty;
@@ -45,12 +49,14 @@ class Business {
       phoneNumber: map['phoneNumber'] ?? '',
       businessType: map['businessType'] ?? '',
       city: map['city'],
+      area: map['area'],
       gstNumber: map['gstNumber'],
       isFssaiRegistered: map['isFssaiRegistered'] ?? false,
       fssaiNumber: map['fssaiNumber'],
       address: map['address'],
       logoUrl: map['logoUrl'],
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      status: map['status'] ?? 'active',
     );
   }
 
@@ -64,14 +70,14 @@ class Business {
       'phoneNumber': phoneNumber,
       'businessType': businessType,
       'city': city,
+      'area': area,
       'gstNumber': gstNumber,
       'isFssaiRegistered': isFssaiRegistered,
       'fssaiNumber': fssaiNumber,
       'address': address,
       'logoUrl': logoUrl,
-      // Note: createdAt should ideally be set only once on creation
-      // or handled specifically in the repository to avoid overwriting with server time on every update.
       'createdAt': createdAt, 
+      'status': status,
     };
   }
 
@@ -90,12 +96,14 @@ class Business {
     String? phoneNumber,
     String? businessType,
     String? city,
+    String? area,
     String? gstNumber,
     bool? isFssaiRegistered,
     String? fssaiNumber,
     String? address,
     String? logoUrl,
     DateTime? createdAt,
+    String? status,
   }) {
     return Business(
       id: id ?? this.id,
@@ -106,12 +114,14 @@ class Business {
       phoneNumber: phoneNumber ?? this.phoneNumber,
       businessType: businessType ?? this.businessType,
       city: city ?? this.city,
+      area: area ?? this.area,
       gstNumber: gstNumber ?? this.gstNumber,
       isFssaiRegistered: isFssaiRegistered ?? this.isFssaiRegistered,
       fssaiNumber: fssaiNumber ?? this.fssaiNumber,
       address: address ?? this.address,
       logoUrl: logoUrl ?? this.logoUrl,
       createdAt: createdAt ?? this.createdAt,
+      status: status ?? this.status,
     );
   }
 }

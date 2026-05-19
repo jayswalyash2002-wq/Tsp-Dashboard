@@ -6,20 +6,35 @@ import '../../core/storage/prefs.dart';
 import '../domain/app_user.dart';
 import 'auth_repository.dart';
 import 'staff_repository.dart';
+import 'otp_service.dart';
+
+import '../../memberships/data/membership_providers.dart';
+
+final otpServiceProvider = Provider<OtpService>((ref) {
+  return MockOtpService();
+});
 
 final authRepositoryProvider = FutureProvider<AuthRepository>((ref) async {
   final auth = ref.watch(firebaseAuthProvider);
   final db = ref.watch(firestoreProvider);
   final prefs = await ref.watch(sharedPreferencesProvider.future);
   final identity = await ref.watch(deviceIdentityProvider.future);
-  return AuthRepository(auth: auth, db: db, prefs: prefs, identity: identity);
+  final otpService = ref.watch(otpServiceProvider);
+  
+  return AuthRepository(
+    auth: auth, 
+    db: db, 
+    prefs: prefs, 
+    identity: identity,
+    otpService: otpService,
+  );
 });
 
 /// Central provider for the current active business ID.
 /// All multi-tenant data providers should depend on this.
 final userBusinessIdProvider = Provider<String?>((ref) {
-  final profile = ref.watch(userProfileProvider).value;
-  return profile?.businessId;
+  final session = ref.watch(sessionProvider);
+  return session.businessId;
 });
 
 final staffRepositoryProvider = Provider<StaffRepository?>((ref) {

@@ -5,17 +5,34 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../data/auth_providers.dart';
 
 class RegisterDetailsScreen extends ConsumerStatefulWidget {
-  const RegisterDetailsScreen({super.key, required this.email});
+  const RegisterDetailsScreen({
+    super.key, 
+    required this.email,
+    required this.phoneNumber,
+    this.initialName,
+    this.initialPassword,
+  });
+  
   final String email;
+  final String phoneNumber;
+  final String? initialName;
+  final String? initialPassword;
 
   @override
   ConsumerState<RegisterDetailsScreen> createState() => _RegisterDetailsScreenState();
 }
 
 class _RegisterDetailsScreenState extends ConsumerState<RegisterDetailsScreen> {
-  final _nameController = TextEditingController();
-  final _passwordController = TextEditingController();
+  late final TextEditingController _nameController;
+  late final TextEditingController _passwordController;
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName);
+    _passwordController = TextEditingController(text: widget.initialPassword);
+  }
 
   @override
   void dispose() {
@@ -38,10 +55,14 @@ class _RegisterDetailsScreenState extends ConsumerState<RegisterDetailsScreen> {
     setState(() => _busy = true);
     try {
       final repo = await ref.read(authRepositoryProvider.future);
+      
+      debugPrint('REGISTER_DETAILS: Finalizing signup for ${widget.email} with phone ${widget.phoneNumber}');
+      
       await repo.signUpWithEmailPassword(
         email: widget.email,
         password: password,
         name: name,
+        phoneNumber: widget.phoneNumber,
       );
       
       // Sync local state
@@ -53,6 +74,8 @@ class _RegisterDetailsScreenState extends ConsumerState<RegisterDetailsScreen> {
         const SnackBar(content: Text('Account created successfully!')),
       );
       
+      // After registration, AuthGate will pick up the authenticated state 
+      // and redirect to Business Setup if no memberships exist.
       context.go('/dashboard');
 
     } on FirebaseAuthException catch (e) {

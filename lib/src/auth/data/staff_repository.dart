@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../domain/app_user.dart';
 import '../../core/rbac/role.dart';
 
@@ -10,26 +11,66 @@ class StaffRepository {
 
   /// Fetches all staff members belonging to a specific business.
   Stream<List<AppUser>> watchStaff() {
+    debugPrint('STAFF_REPO: Watching staff for businessId: $_businessId');
     return _db
         .collection('users')
         .where('businessId', isEqualTo: _businessId)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => AppUser.fromMap(doc.data()))
-            .toList());
+        .map((snapshot) {
+      final staff = snapshot.docs
+          .map((doc) => AppUser.fromMap(doc.data()))
+          .toList();
+      
+      // Strict isolation filter
+      return staff.where((u) => u.businessId == _businessId).toList();
+    });
   }
 
   /// Updates a staff member's role.
   Future<void> updateStaffRole(String uid, RoleType newRole) async {
-    await _db.collection('users').doc(uid).update({
-      'role': newRole.name.toUpperCase(),
+    debugPrint('STAFF_REPO: Updating role for user $uid in business $_businessId');
+    
+    final docRef = _db.collection('users').doc(uid);
+    
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(docRef);
+      if (!snap.exists) throw Exception('User not found');
+      
+      final existingBusinessId = snap.data()?['businessId']?.toString();
+      if (existingBusinessId != _businessId) {
+        debugPrint('CRITICAL: Blocked unauthorized staff role update. '
+            'Expected: $_businessId, Found: $existingBusinessId');
+        throw Exception('Access Denied: Business ownership mismatch');
+      }
+
+      tx.update(docRef, {
+        'role': newRole.name.toUpperCase(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     });
   }
 
   /// Deactivates a staff member.
   Future<void> toggleStaffStatus(String uid, bool isActive) async {
-    await _db.collection('users').doc(uid).update({
-      'isActive': isActive,
+    debugPrint('STAFF_REPO: Toggling status for user $uid in business $_businessId');
+    
+    final docRef = _db.collection('users').doc(uid);
+    
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(docRef);
+      if (!snap.exists) throw Exception('User not found');
+      
+      final existingBusinessId = snap.data()?['businessId']?.toString();
+      if (existingBusinessId != _businessId) {
+        debugPrint('CRITICAL: Blocked unauthorized staff status toggle. '
+            'Expected: $_businessId, Found: $existingBusinessId');
+        throw Exception('Access Denied: Business ownership mismatch');
+      }
+
+      tx.update(docRef, {
+        'isActive': isActive,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     });
   }
   
@@ -39,8 +80,9 @@ class StaffRepository {
     required String email,
     required RoleType role,
   }) async {
-    final docRef = _db.collection('users').doc(); // Auto-generate ID or use email?
-    // Using auto-ID for now. In production, this would be linked to a real Auth user.
+    debugPrint('STAFF_REPO: Adding new staff member for businessId: $_businessId');
+    
+    final docRef = _db.collection('users').doc(); 
     await docRef.set({
       'uid': docRef.id,
       'displayName': name,
@@ -49,8 +91,7 @@ class StaffRepository {
       'businessId': _businessId,
       'isActive': true,
       'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
     });
   }
-
-  // Note: Admin creates staff accounts by adding a record to the users collection.
 }

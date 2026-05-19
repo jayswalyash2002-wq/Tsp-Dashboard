@@ -2,24 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../auth/presentation/auth_gate.dart';
-import '../auth/presentation/otp_verification_screen.dart';
-import '../auth/presentation/register_details_screen.dart';
-import '../auth/presentation/sign_up_screen.dart';
-import '../dashboard/presentation/dashboard_screen.dart';
-import '../dashboard/presentation/edit_menu_screen.dart';
-import '../dashboard/presentation/history_screen.dart';
-import '../expenses/presentation/expenses_screen.dart';
-import '../profile/presentation/profile_screen.dart';
-import '../reports/presentation/expense_reports_screen.dart';
-import '../reports/presentation/sales_reports_screen.dart';
-import '../business/presentation/business_setup_screen.dart';
-import 'shell_scaffold.dart';
+import 'package:tsp_dashboard/src/auth/presentation/auth_gate.dart';
+import 'package:tsp_dashboard/src/auth/presentation/login_screen.dart';
+import 'package:tsp_dashboard/src/auth/presentation/otp_verification_screen.dart';
+import 'package:tsp_dashboard/src/auth/presentation/sign_up_screen.dart';
+import 'package:tsp_dashboard/src/auth/presentation/register_details_screen.dart';
+import 'package:tsp_dashboard/src/dashboard/presentation/dashboard_screen.dart';
+import 'package:tsp_dashboard/src/dashboard/presentation/edit_menu_screen.dart';
+import 'package:tsp_dashboard/src/dashboard/presentation/history_screen.dart';
+import 'package:tsp_dashboard/src/expenses/presentation/expenses_screen.dart';
+import 'package:tsp_dashboard/src/profile/presentation/profile_screen.dart';
+import 'package:tsp_dashboard/src/reports/presentation/expense_reports_screen.dart';
+import 'package:tsp_dashboard/src/reports/presentation/sales_reports_screen.dart';
+import 'package:tsp_dashboard/src/business/presentation/business_setup_screen.dart';
+import 'package:tsp_dashboard/src/auth/presentation/staff_management_screen.dart';
+import 'package:tsp_dashboard/src/app/shell_scaffold.dart';
 
-import '../core/rbac/permission.dart';
-import '../core/rbac/permission_manager.dart';
-
-import '../auth/presentation/staff_management_screen.dart';
+import 'package:tsp_dashboard/src/core/rbac/permission.dart';
+import 'package:tsp_dashboard/src/core/rbac/permission_manager.dart';
 
 final goRouterProvider = Provider<GoRouter>((ref) {
   final permissionManager = ref.watch(permissionManagerProvider);
@@ -51,13 +51,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(
-        path: '/staff',
-        builder: (context, state) => const StaffManagementScreen(),
-      ),
-      GoRoute(
         path: '/auth',
         builder: (context, state) => const AuthGate(),
         routes: [
+          GoRoute(
+            path: 'login',
+            builder: (context, state) => const LoginScreen(),
+          ),
           GoRoute(
             path: 'signup',
             builder: (context, state) => const SignUpScreen(),
@@ -65,15 +65,26 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'otp',
             builder: (context, state) {
-              final email = state.uri.queryParameters['email'] ?? '';
-              return OtpVerificationScreen(email: email);
+              final params = state.uri.queryParameters;
+              return OtpVerificationScreen(
+                email: params['email'] ?? '',
+                phone: params['phone'] ?? '',
+                name: params['name'] ?? '',
+                password: params['password'] ?? '',
+                verificationId: params['verificationId'] ?? '',
+              );
             },
           ),
           GoRoute(
-            path: 'details',
+            path: 'register-details',
             builder: (context, state) {
-              final email = state.uri.queryParameters['email'] ?? '';
-              return RegisterDetailsScreen(email: email);
+              final params = state.uri.queryParameters;
+              return RegisterDetailsScreen(
+                email: params['email'] ?? '',
+                phoneNumber: params['phone'] ?? '',
+                initialName: params['name'],
+                initialPassword: params['password'],
+              );
             },
           ),
         ],
@@ -81,6 +92,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => AuthGate(child: child),
         routes: [
+          GoRoute(
+            path: '/staff',
+            builder: (context, state) => const StaffManagementScreen(),
+          ),
           GoRoute(
             path: '/edit-menu',
             builder: (context, state) => const EditMenuScreen(),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'permission.dart';
 
 enum RoleType {
@@ -38,10 +39,12 @@ enum RoleType {
   }
 
   static RoleType fromString(String role) {
-    return RoleType.values.firstWhere(
-      (r) => r.name.toLowerCase() == role.toLowerCase(),
-      orElse: () => RoleType.cashier,
-    );
+    final normalized = role.trim().toLowerCase();
+    for (final r in RoleType.values) {
+      if (r.name == normalized) return r;
+    }
+    debugPrint('ROLE_TYPE_ERROR: Legacy role "$role" is invalid. Defaulting to cashier for compatibility.');
+    return RoleType.cashier;
   }
 }
 

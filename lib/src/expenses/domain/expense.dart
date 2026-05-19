@@ -11,6 +11,7 @@ class Expense {
     required this.createdBy,
     required this.timestamp,
     required this.timestampMs,
+    this.businessId,
   });
 
   final String id;
@@ -21,6 +22,7 @@ class Expense {
   final String createdBy;
   final DateTime timestamp;
   final int timestampMs;
+  final String? businessId;
 
   Map<String, dynamic> toMap() {
     return {
@@ -31,6 +33,7 @@ class Expense {
       'createdBy': createdBy,
       'timestamp': Timestamp.fromDate(timestamp),
       'timestampMs': timestampMs,
+      if (businessId != null) 'businessId': businessId,
     };
   }
 
@@ -44,6 +47,7 @@ class Expense {
       createdBy: map['createdBy'] ?? '',
       timestamp: (map['timestamp'] as Timestamp).toDate(),
       timestampMs: map['timestampMs'] ?? 0,
+      businessId: map['businessId']?.toString(),
     );
   }
 
