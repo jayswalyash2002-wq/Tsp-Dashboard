@@ -396,7 +396,8 @@ class _ExpenseTile extends ConsumerWidget {
                 Navigator.pop(context);
                 try {
                   final repo = await ref.read(expenseRepositoryProvider.future);
-                  await repo.deleteExpense(expense);
+                  if (repo == null) throw StateError('Expense repository not available');
+                  await repo!.deleteExpense(expense);
                   messenger.showSnackBar(const SnackBar(content: Text('Expense deleted')));
                 } catch (e) {
                   messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -474,6 +475,7 @@ class _ExpenseFormSheetState extends ConsumerState<_ExpenseFormSheet> {
     try {
       final user = ref.read(deviceNameProvider) ?? 'User';
       final repo = await ref.read(expenseRepositoryProvider.future);
+      if (repo == null) throw StateError('Expense repository not available');
       
       final expense = Expense(
         id: widget.expense?.id ?? '',
@@ -486,7 +488,7 @@ class _ExpenseFormSheetState extends ConsumerState<_ExpenseFormSheet> {
         timestampMs: widget.expense?.timestampMs ?? DateTime.now().millisecondsSinceEpoch,
       );
 
-      await repo.saveExpense(expense);
+      await repo!.saveExpense(expense);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
@@ -609,6 +611,8 @@ class _AddFundsSheetState extends ConsumerState<_AddFundsSheet> {
     try {
       final user = ref.read(firebaseAuthProvider).currentUser;
       final deviceName = ref.read(deviceNameProvider) ?? 'Unknown device';
+      final repo = ref.read(fundRepositoryProvider);
+      if (repo == null) throw StateError('Fund repository not available');
       
       final movement = FundMovement(
         id: '',
@@ -623,7 +627,7 @@ class _AddFundsSheetState extends ConsumerState<_AddFundsSheet> {
         deviceName: deviceName,
       );
 
-      await ref.read(fundRepositoryProvider).addFunds(movement);
+      await repo!.addFunds(movement);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {

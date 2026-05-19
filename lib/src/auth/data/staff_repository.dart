@@ -3,15 +3,16 @@ import '../domain/app_user.dart';
 import '../../core/rbac/role.dart';
 
 class StaffRepository {
-  final FirebaseFirestore _db;
+  StaffRepository(this._db, this._businessId);
 
-  StaffRepository(this._db);
+  final FirebaseFirestore _db;
+  final String _businessId;
 
   /// Fetches all staff members belonging to a specific business.
-  Stream<List<AppUser>> watchStaff(String businessId) {
+  Stream<List<AppUser>> watchStaff() {
     return _db
         .collection('users')
-        .where('businessId', isEqualTo: businessId)
+        .where('businessId', isEqualTo: _businessId)
         .snapshots()
         .map((snapshot) => snapshot.docs
             .map((doc) => AppUser.fromMap(doc.data()))
@@ -34,7 +35,6 @@ class StaffRepository {
   
   /// Adds a new staff member to the business.
   Future<void> addStaffMember({
-    required String businessId,
     required String name,
     required String email,
     required RoleType role,
@@ -46,7 +46,7 @@ class StaffRepository {
       'displayName': name,
       'email': email.toLowerCase().trim(),
       'role': role.name.toUpperCase(),
-      'businessId': businessId,
+      'businessId': _businessId,
       'isActive': true,
       'createdAt': FieldValue.serverTimestamp(),
     });

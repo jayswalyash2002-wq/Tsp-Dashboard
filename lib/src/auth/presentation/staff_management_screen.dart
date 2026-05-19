@@ -24,7 +24,10 @@ class StaffManagementScreen extends ConsumerWidget {
               trailing: PopupMenuButton<RoleType>(
                 icon: const Icon(Icons.edit_outlined),
                 onSelected: (newRole) {
-                  ref.read(staffRepositoryProvider).updateStaffRole(staff.uid, newRole);
+                  final repo = ref.read(staffRepositoryProvider);
+                  if (repo != null) {
+                    repo.updateStaffRole(staff.uid, newRole);
+                  }
                 },
                 itemBuilder: (context) => RoleType.values
                     .map((role) => PopupMenuItem(
@@ -104,12 +107,11 @@ class StaffManagementScreen extends ConsumerWidget {
                   return;
                 }
 
-                final currentUser = ref.read(userProfileProvider).value;
-                if (currentUser?.businessId == null) return;
+                final repo = ref.read(staffRepositoryProvider);
+                if (repo == null) return;
 
                 try {
-                  await ref.read(staffRepositoryProvider).addStaffMember(
-                    businessId: currentUser!.businessId!,
+                  await repo.addStaffMember(
                     name: name,
                     email: email,
                     role: selectedRole,

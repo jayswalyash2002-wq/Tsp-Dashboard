@@ -1,43 +1,37 @@
 import 'dart:math';
+import 'package:intl/intl.dart';
 
-/// A utility class to generate human-readable Unique Identification Numbers (UIN).
+/// A utility class to generate permanent, human-readable Unique Identification Numbers (UIN).
 /// 
-/// Format: [PREFIX]-[CITY]-[ALPHANUMERIC_CODE]
-/// Example: TSP-DEL-8F2K9
+/// Format: [TYPE]-[YEAR]-[SEQUENCE]-[SUFFIX]
+/// Example: BIZ-24-00142-X7K29
 class UINGenerator {
-  /// Characters used for random generation.
-  /// Excludes visually similar characters: O, 0, I, 1, L, S (5), Z (2) if desired.
-  /// Standard "No-Lookalike" set:
   static const String _charset = 'ABCDEFGHJKMNPQRSTUVWXYZ346789';
 
-  /// Generates a unique-looking business ID.
+  /// Generates a display UIN.
   /// 
-  /// [prefix] - Defaults to 'TSP'.
-  /// [city] - Optional city name to derive a 3-letter code.
-  static String generateBusinessUIN({
-    String prefix = 'TSP',
-    String? city,
+  /// [type] - 'BIZ' for Business, 'BRN' for Branch, 'INV' for Invoice, etc.
+  /// [sequence] - An incrementing number (e.g. from a database counter).
+  /// [year] - Defaults to current 2-digit year.
+  static String generateUIN({
+    required String type,
+    required int sequence,
+    String? year,
   }) {
     final random = Random();
     
-    // Generate 5-character alphanumeric code
+    // 1. Random Suffix (5 chars) to prevent easy guessing and add collision safety
     final randomCode = StringBuffer();
     for (var i = 0; i < 5; i++) {
       randomCode.write(_charset[random.nextInt(_charset.length)]);
     }
 
-    String cityCode = 'GEN';
-    if (city != null && city.trim().isNotEmpty) {
-      // Remove spaces/special chars, take first 3, uppercase
-      final sanitizedCity = city.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z]'), '');
-      
-      if (sanitizedCity.length >= 3) {
-        cityCode = sanitizedCity.substring(0, 3);
-      } else if (sanitizedCity.isNotEmpty) {
-        cityCode = sanitizedCity.padRight(3, 'X');
-      }
-    }
+    // 2. Year Code (YY)
+    final yearCode = year ?? DateFormat('yy').format(DateTime.now());
 
-    return '$prefix-$cityCode-$randomCode';
+    // 3. Padded Sequence (e.g. 00001)
+    final paddedSequence = sequence.toString().padLeft(5, '0');
+
+    return '$type-$yearCode-$paddedSequence-${randomCode.toString()}';
   }
 }

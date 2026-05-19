@@ -9,15 +9,19 @@ class ExpenseRepository {
   ExpenseRepository({
     required FirebaseFirestore db,
     required FirebaseAuth auth,
+    required String businessId,
   })  : _db = db,
-        _auth = auth;
+        _auth = auth,
+        _businessId = businessId;
 
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;
+  final String _businessId;
 
   Stream<List<Expense>> watchExpenses() {
     return _db
         .collection('expenses')
+        .where('businessId', isEqualTo: _businessId)
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snap) => snap.docs
@@ -32,7 +36,7 @@ class ExpenseRepository {
     final isNew = expense.id.isEmpty;
     final expenseId = isNew ? const Uuid().v4() : expense.id;
     final expenseRef = _db.collection('expenses').doc(expenseId);
-    final balancesRef = _db.collection('balances').doc('current');
+    final balancesRef = _db.collection('balances').doc(_businessId);
 
     await _db.runTransaction((tx) async {
       // 1. READS
@@ -67,10 +71,14 @@ class ExpenseRepository {
       }
 
       // 3. WRITES
-      tx.set(expenseRef, expense.copyWith(id: expenseId).toMap());
+      tx.set(expenseRef, {
+        ...expense.copyWith(id: expenseId).toMap(),
+        'businessId': _businessId,
+      });
       tx.set(
         balancesRef,
         {
+          'businessId': _businessId,
           'cashBalancePaise': cash,
           'bankBalancePaise': bank,
           'updatedAt': FieldValue.serverTimestamp(),
@@ -82,7 +90,7 @@ class ExpenseRepository {
 
   Future<void> deleteExpense(Expense expense) async {
     final expenseRef = _db.collection('expenses').doc(expense.id);
-    final balancesRef = _db.collection('balances').doc('current');
+    final balancesRef = _db.collection('balances').doc(_businessId);
 
     await _db.runTransaction((tx) async {
       // 1. READS
@@ -105,6 +113,7 @@ class ExpenseRepository {
       tx.set(
         balancesRef,
         {
+          'businessId': _businessId,
           'cashBalancePaise': cash,
           'bankBalancePaise': bank,
           'updatedAt': FieldValue.serverTimestamp(),

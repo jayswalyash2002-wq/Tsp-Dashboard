@@ -10,37 +10,56 @@ import 'order_repository.dart';
 import 'session_repository.dart';
 import '../domain/business_session.dart';
 
-final menuRepositoryProvider = Provider<MenuRepository>((ref) {
-  return MenuRepository(ref.watch(firestoreProvider));
+final menuRepositoryProvider = Provider<MenuRepository?>((ref) {
+  final businessId = ref.watch(userBusinessIdProvider);
+  if (businessId == null) return null;
+  return MenuRepository(ref.watch(firestoreProvider), businessId);
 });
 
 final menuItemsProvider = StreamProvider<List<MenuItem>>((ref) {
-  return ref.watch(menuRepositoryProvider).watchMenu();
+  final repo = ref.watch(menuRepositoryProvider);
+  if (repo == null) return Stream.value([]);
+  return repo.watchMenu();
 });
 
-final orderRepositoryProvider = FutureProvider<OrderRepository>((ref) async {
+final orderRepositoryProvider = FutureProvider<OrderRepository?>((ref) async {
+  final businessId = ref.watch(userBusinessIdProvider);
+  if (businessId == null) return null;
+  
   final db = ref.watch(firestoreProvider);
   final auth = ref.watch(firebaseAuthProvider);
   final authRepo = await ref.watch(authRepositoryProvider.future);
-  return OrderRepository(db: db, auth: auth, authRepo: authRepo);
+  return OrderRepository(db: db, auth: auth, authRepo: authRepo, businessId: businessId);
 });
 
 final ordersProvider = StreamProvider<List<SavedOrder>>((ref) async* {
   final repo = await ref.watch(orderRepositoryProvider.future);
-  yield* repo.watchOrders();
+  if (repo == null) {
+    yield [];
+  } else {
+    yield* repo.watchOrders();
+  }
 });
 
 final activeKitchenOrdersProvider = StreamProvider<List<SavedOrder>>((ref) async* {
   final repo = await ref.watch(orderRepositoryProvider.future);
-  yield* repo.watchActiveKitchenOrders();
+  if (repo == null) {
+    yield [];
+  } else {
+    yield* repo.watchActiveKitchenOrders();
+  }
 });
 
-final sessionRepositoryProvider = Provider<SessionRepository>((ref) {
-  return SessionRepository(ref.watch(firestoreProvider));
+final sessionRepositoryProvider = Provider<SessionRepository?>((ref) {
+  final businessId = ref.watch(userBusinessIdProvider);
+  if (businessId == null) return null;
+  return SessionRepository(ref.watch(firestoreProvider), businessId);
 });
 
 final currentSessionProvider = StreamProvider<BusinessSession?>((ref) {
-  return ref.watch(sessionRepositoryProvider).watchCurrentSession();
+  final repo = ref.watch(sessionRepositoryProvider);
+  if (repo == null) return Stream.value(null);
+  return repo.watchCurrentSession();
 });
 
 final effectiveBusinessDateProvider = Provider<DateTime>((ref) {

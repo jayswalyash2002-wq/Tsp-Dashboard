@@ -10,17 +10,21 @@ class OrderRepository {
     required FirebaseFirestore db,
     required FirebaseAuth auth,
     required AuthRepository authRepo,
+    required String businessId,
   })  : _db = db,
         _auth = auth,
-        _authRepo = authRepo;
+        _authRepo = authRepo,
+        _businessId = businessId;
 
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;
   final AuthRepository _authRepo;
+  final String _businessId;
 
   Stream<List<SavedOrder>> watchOrders() {
     return _db
         .collection('orders')
+        .where('businessId', isEqualTo: _businessId)
         .orderBy('timestamp', descending: true)
         .limit(100)
         .snapshots()
@@ -38,7 +42,7 @@ class OrderRepository {
     final orderId = const Uuid().v4();
 
     final orderRef = _db.collection('orders').doc(orderId);
-    final balancesRef = _db.collection('balances').doc('current');
+    final balancesRef = _db.collection('balances').doc(_businessId);
 
     await _db.runTransaction((tx) async {
       // 1. PERFORM ALL READS FIRST
@@ -57,6 +61,7 @@ class OrderRepository {
         tx.set(
           balancesRef,
           {
+            'businessId': _businessId,
             'cashBalancePaise': cash,
             'bankBalancePaise': bank,
             'updatedAt': FieldValue.serverTimestamp(),
@@ -68,6 +73,7 @@ class OrderRepository {
 
       tx.set(orderRef, {
         'orderId': orderId,
+        'businessId': _businessId,
         'timestamp': Timestamp.fromDate(now),
         'timestampMs': now.millisecondsSinceEpoch,
         'loggedInUser': {
@@ -109,7 +115,7 @@ class OrderRepository {
 
   Future<void> updateOrder(SavedOrder oldOrder, SavedOrder newOrder) async {
     final orderRef = _db.collection('orders').doc(oldOrder.id);
-    final balancesRef = _db.collection('balances').doc('current');
+    final balancesRef = _db.collection('balances').doc(_businessId);
 
     await _db.runTransaction((tx) async {
       // 1. PERFORM ALL READS FIRST
@@ -137,6 +143,7 @@ class OrderRepository {
       tx.set(
         balancesRef,
         {
+          'businessId': _businessId,
           'cashBalancePaise': cash,
           'bankBalancePaise': bank,
           'updatedAt': FieldValue.serverTimestamp(),
@@ -201,6 +208,7 @@ class OrderRepository {
   Stream<List<SavedOrder>> watchActiveKitchenOrders() {
     return _db
         .collection('orders')
+        .where('businessId', isEqualTo: _businessId)
         .where('status', whereIn: [
           OrderStatus.pending.name,
           OrderStatus.preparing.name,

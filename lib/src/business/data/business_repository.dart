@@ -10,21 +10,45 @@ class BusinessRepository {
 
   BusinessRepository(this._db, this._storage);
 
-  Future<String> _generateUniqueUIN({String? city}) async {
-    String uin;
-    bool exists;
-    do {
-      uin = UINGenerator.generateBusinessUIN(city: city);
-      final snap = await _db.collection('businesses').where('uin', isEqualTo: uin).get();
-      exists = snap.docs.isNotEmpty;
-    } while (exists);
-    return uin;
+  Future<int> _getNextSequence(String counterName) async {
+    final counterRef = _db.collection('metadata').doc('counters');
+    
+    return await _db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(counterRef);
+      
+      if (!snapshot.exists) {
+        transaction.set(counterRef, {counterName: 1});
+        return 1;
+      }
+      
+      final data = snapshot.data()!;
+      final int current = data[counterName] ?? 0;
+      final int next = current + 1;
+      
+      transaction.update(counterRef, {counterName: next});
+      return next;
+    });
+  }
+
+  Future<String> _generateDisplayUIN({required String type}) async {
+    final sequence = await _getNextSequence(type.toLowerCase());
+    return UINGenerator.generateUIN(type: type, sequence: sequence);
   }
 
   Future<Business?> getBusiness(String businessId) async {
     final doc = await _db.collection('businesses').doc(businessId).get();
     if (!doc.exists) return null;
-    return Business.fromMap(doc.data()!, doc.id);
+    
+    Business business = Business.fromMap(doc.data()!, doc.id);
+    
+    // Backfill UIN if missing (Production-safe migration)
+    if (business.uin.isEmpty) {
+      final newUin = await _generateDisplayUIN(type: 'BIZ');
+      business = business.copyWith(uin: newUin);
+      await _db.collection('businesses').doc(businessId).update({'uin': newUin});
+    }
+    
+    return business;
   }
 
   Stream<Business?> watchBusiness(String businessId) {
@@ -32,17 +56,29 @@ class BusinessRepository {
         .collection('businesses')
         .doc(businessId)
         .snapshots()
-        .map((doc) => doc.exists ? Business.fromMap(doc.data()!, doc.id) : null);
+        .asyncMap((doc) async {
+          if (!doc.exists) return null;
+          Business business = Business.fromMap(doc.data()!, doc.id);
+          
+          // Backfill UIN if missing during stream observation
+          if (business.uin.isEmpty) {
+            final newUin = await _generateDisplayUIN(type: 'BIZ');
+            await _db.collection('businesses').doc(businessId).update({'uin': newUin});
+            return business.copyWith(uin: newUin);
+          }
+          
+          return business;
+        });
   }
 
   Future<Business> createBusiness({
     required String uid,
     required Business business,
   }) async {
-    // 1. Generate a unique human-readable UIN using the selected city
-    final uin = await _generateUniqueUIN(city: business.city);
+    // 1. Generate permanent Display UIN
+    final uin = await _generateDisplayUIN(type: 'BIZ');
     
-    // 2. Use a standard Firestore ID for the document
+    // 2. Internal UUID is handled by Firestore auto-ID
     final businessRef = _db.collection('businesses').doc();
     final businessId = businessRef.id;
     
@@ -56,6 +92,7 @@ class BusinessRepository {
       officialEmail: business.officialEmail,
       phoneNumber: business.phoneNumber,
       businessType: business.businessType,
+      city: business.city,
       gstNumber: business.gstNumber,
       isFssaiRegistered: business.isFssaiRegistered,
       fssaiNumber: business.fssaiNumber,
@@ -65,7 +102,7 @@ class BusinessRepository {
     );
 
     final batch = _db.batch();
-    batch.set(businessRef, finalBusiness.toMap());
+    batch.set(businessRef, finalBusiness.toCreateMap());
     batch.set(
       userRef,
       {
@@ -79,13 +116,27 @@ class BusinessRepository {
     return finalBusiness;
   }
 
-  Future<String?> uploadLogo(String businessId, File file) async {
-    final ref = _storage.ref().child('businesses/$businessId/logo.png');
-    await ref.putFile(file);
-    return await ref.getDownloadURL();
+  Future<Business> updateBusiness(Business business) async {
+    // Ensure UIN is never accidentally changed if it already exists
+    final doc = await _db.collection('businesses').doc(business.id).get();
+    String uin = business.uin;
+    
+    if (doc.exists) {
+      final existingData = doc.data()!;
+      final existingUin = existingData['uin'] as String?;
+      if (existingUin != null && existingUin.isNotEmpty) {
+        uin = existingUin; // Lock to existing UIN
+      }
+    }
+
+    if (uin.isEmpty) {
+      uin = await _generateDisplayUIN(type: 'BIZ');
+    }
+
+    final businessToUpdate = business.copyWith(uin: uin);
+    await _db.collection('businesses').doc(businessToUpdate.id).update(businessToUpdate.toMap());
+    return businessToUpdate;
   }
 
-  Future<void> updateBusiness(Business business) async {
-    await _db.collection('businesses').doc(business.id).update(business.toMap());
-  }
+  // TODO: Implement Firebase Storage uploadLogo
 }

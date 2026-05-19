@@ -321,7 +321,9 @@ class _BusinessStatusCard extends ConsumerWidget {
   Future<void> _openBusiness(BuildContext context, WidgetRef ref) async {
     final now = DateTime.now();
     final businessDate = BusinessDateUtils.formatBusinessDate(now);
-    await ref.read(sessionRepositoryProvider).openBusiness(businessDate);
+    final repo = ref.read(sessionRepositoryProvider);
+    if (repo == null) return;
+    await repo.openBusiness(businessDate);
   }
 
   void _showCloseConfirm(BuildContext context, WidgetRef ref) {
@@ -336,7 +338,10 @@ class _BusinessStatusCard extends ConsumerWidget {
               child: const Text('Cancel')),
           TextButton(
             onPressed: () {
-              ref.read(sessionRepositoryProvider).closeBusiness();
+              final repo = ref.read(sessionRepositoryProvider);
+              if (repo != null) {
+                repo.closeBusiness();
+              }
               Navigator.pop(context);
             },
             child: const Text('Close', style: TextStyle(color: Colors.red)),

@@ -69,8 +69,16 @@ class Business {
       'fssaiNumber': fssaiNumber,
       'address': address,
       'logoUrl': logoUrl,
-      'createdAt': FieldValue.serverTimestamp(),
+      // Note: createdAt should ideally be set only once on creation
+      // or handled specifically in the repository to avoid overwriting with server time on every update.
+      'createdAt': createdAt, 
     };
+  }
+
+  Map<String, dynamic> toCreateMap() {
+    final map = toMap();
+    map['createdAt'] = FieldValue.serverTimestamp();
+    return map;
   }
 
   Business copyWith({

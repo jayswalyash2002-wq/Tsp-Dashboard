@@ -5,28 +5,45 @@ import '../domain/fund_movement.dart';
 import 'expense_repository.dart';
 import 'fund_repository.dart';
 
-final expenseRepositoryProvider = FutureProvider<ExpenseRepository>((ref) async {
+import '../../auth/data/auth_providers.dart';
+
+final expenseRepositoryProvider = FutureProvider<ExpenseRepository?>((ref) async {
+  final businessId = ref.watch(userBusinessIdProvider);
+  if (businessId == null) return null;
+
   final db = ref.watch(firestoreProvider);
   final auth = ref.watch(firebaseAuthProvider);
-  return ExpenseRepository(db: db, auth: auth);
+  return ExpenseRepository(db: db, auth: auth, businessId: businessId);
 });
 
-final fundRepositoryProvider = Provider<FundRepository>((ref) {
+final fundRepositoryProvider = Provider<FundRepository?>((ref) {
+  final businessId = ref.watch(userBusinessIdProvider);
+  if (businessId == null) return null;
+
   final db = ref.watch(firestoreProvider);
   final auth = ref.watch(firebaseAuthProvider);
-  return FundRepository(db: db, auth: auth);
+  return FundRepository(db: db, auth: auth, businessId: businessId);
 });
 
 final expensesProvider = StreamProvider<List<Expense>>((ref) async* {
   final repo = await ref.watch(expenseRepositoryProvider.future);
-  yield* repo.watchExpenses();
+  if (repo == null) {
+    yield [];
+  } else {
+    yield* repo.watchExpenses();
+  }
 });
 
 final fundMovementsProvider = StreamProvider<List<FundMovement>>((ref) {
-  return ref.watch(fundRepositoryProvider).watchFundMovements();
+  final repo = ref.watch(fundRepositoryProvider);
+  if (repo == null) return Stream.value([]);
+  return repo.watchFundMovements();
 });
 
 final balancesProvider = StreamProvider<Map<String, dynamic>>((ref) {
+  final businessId = ref.watch(userBusinessIdProvider);
+  if (businessId == null) return Stream.value({});
+
   final db = ref.watch(firestoreProvider);
-  return db.collection('balances').doc('current').snapshots().map((s) => s.data() ?? {});
+  return db.collection('balances').doc(businessId).snapshots().map((s) => s.data() ?? {});
 });

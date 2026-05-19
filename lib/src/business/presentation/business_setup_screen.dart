@@ -139,10 +139,11 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
       if (existingBusiness == null) {
         finalBusinessData = await repo.createBusiness(uid: user.uid, business: businessData);
       } else {
-        finalBusinessData = businessData;
-        await repo.updateBusiness(businessData);
+        finalBusinessData = await repo.updateBusiness(businessData);
       }
       
+      /* 
+      // TODO: Implement Firebase Storage upload
       if (_logoFile != null) {
         logoUrl = await repo.uploadLogo(finalBusinessData.id, _logoFile!);
         if (logoUrl != null) {
@@ -150,6 +151,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           await repo.updateBusiness(finalBusinessData);
         }
       }
+      */
 
       ref.invalidate(userProfileProvider);
       
@@ -286,7 +288,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
               const SizedBox(height: 16),
 
               DropdownButtonFormField<String>(
-                value: _selectedCity,
+                initialValue: _selectedCity,
                 decoration: const InputDecoration(
                   labelText: 'Business City*',
                   hintText: 'Select city for UIN generation',

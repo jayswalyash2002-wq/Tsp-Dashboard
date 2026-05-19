@@ -15,15 +15,24 @@ final authRepositoryProvider = FutureProvider<AuthRepository>((ref) async {
   return AuthRepository(auth: auth, db: db, prefs: prefs, identity: identity);
 });
 
-final staffRepositoryProvider = Provider<StaffRepository>((ref) {
-  return StaffRepository(ref.watch(firestoreProvider));
+/// Central provider for the current active business ID.
+/// All multi-tenant data providers should depend on this.
+final userBusinessIdProvider = Provider<String?>((ref) {
+  final profile = ref.watch(userProfileProvider).value;
+  return profile?.businessId;
+});
+
+final staffRepositoryProvider = Provider<StaffRepository?>((ref) {
+  final businessId = ref.watch(userBusinessIdProvider);
+  if (businessId == null) return null;
+  return StaffRepository(ref.watch(firestoreProvider), businessId);
 });
 
 final staffListProvider = StreamProvider<List<AppUser>>((ref) {
-  final user = ref.watch(userProfileProvider).value;
-  if (user == null || user.businessId == null) return Stream.value([]);
+  final repo = ref.watch(staffRepositoryProvider);
+  if (repo == null) return Stream.value([]);
   
-  return ref.watch(staffRepositoryProvider).watchStaff(user.businessId!);
+  return repo.watchStaff();
 });
 
 final deviceNameProvider = StateProvider<String?>((ref) {

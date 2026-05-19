@@ -95,7 +95,9 @@ class EditMenuScreen extends ConsumerWidget {
                 trailing: Switch(
                   value: menuItem.available,
                   onChanged: (val) {
-                    ref.read(menuRepositoryProvider).updateMenuItem(MenuItem(
+                    final repo = ref.read(menuRepositoryProvider);
+                    if (repo == null) return;
+                    repo.updateMenuItem(MenuItem(
                           id: menuItem.id,
                           name: menuItem.name,
                           pricePaise: menuItem.pricePaise,
@@ -144,6 +146,7 @@ class EditMenuScreen extends ConsumerWidget {
 
     // Now re-calculate all sort orders and update Firestore.
     final repo = ref.read(menuRepositoryProvider);
+    if (repo == null) return;
     String currentCategory = 'Uncategorized';
     int catOrder = 0;
     int itemOrder = 0;
@@ -218,6 +221,12 @@ class EditMenuScreen extends ConsumerWidget {
 
               try {
                 final repo = ref.read(menuRepositoryProvider);
+                if (repo == null) {
+                   ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Menu repository not available')),
+                  );
+                  return;
+                }
                 if (item == null) {
                   await repo.addMenuItem(MenuItem(
                     id: '',
@@ -267,7 +276,10 @@ class EditMenuScreen extends ConsumerWidget {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
             onPressed: () {
-              ref.read(menuRepositoryProvider).deleteMenuItem(item.id);
+              final repo = ref.read(menuRepositoryProvider);
+              if (repo != null) {
+                repo.deleteMenuItem(item.id);
+              }
               Navigator.pop(context);
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),

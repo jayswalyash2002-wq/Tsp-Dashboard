@@ -7,15 +7,19 @@ class FundRepository {
   FundRepository({
     required FirebaseFirestore db,
     required FirebaseAuth auth,
+    required String businessId,
   })  : _db = db,
-        _auth = auth;
+        _auth = auth,
+        _businessId = businessId;
 
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;
+  final String _businessId;
 
   Stream<List<FundMovement>> watchFundMovements() {
     return _db
         .collection('fund_movements')
+        .where('businessId', isEqualTo: _businessId)
         .orderBy('timestamp', descending: true)
         .limit(20)
         .snapshots()
@@ -30,7 +34,7 @@ class FundRepository {
 
     final id = const Uuid().v4();
     final movementRef = _db.collection('fund_movements').doc(id);
-    final balancesRef = _db.collection('balances').doc('current');
+    final balancesRef = _db.collection('balances').doc(_businessId);
 
     await _db.runTransaction((tx) async {
       // 1. READS
@@ -48,10 +52,14 @@ class FundRepository {
       }
 
       // 3. WRITES
-      tx.set(movementRef, movement.toMap());
+      tx.set(movementRef, {
+        ...movement.toMap(),
+        'businessId': _businessId,
+      });
       tx.set(
         balancesRef,
         {
+          'businessId': _businessId,
           'cashBalancePaise': cash,
           'bankBalancePaise': bank,
           'updatedAt': FieldValue.serverTimestamp(),

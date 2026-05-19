@@ -3,14 +3,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../domain/menu_item.dart';
 
 class MenuRepository {
-  MenuRepository(this._db);
+  MenuRepository(this._db, this._businessId);
 
   final FirebaseFirestore _db;
+  final String _businessId;
 
   Stream<List<MenuItem>> watchMenu() {
     return _db
         .collection('menu')
-        .orderBy('name') // Simplified to one order field to avoid requiring an index
+        .where('businessId', isEqualTo: _businessId)
+        .orderBy('name')
         .snapshots()
         .map((snap) => snap.docs
             .map((d) => MenuItem.fromDoc(d.id, d.data()))
@@ -19,6 +21,7 @@ class MenuRepository {
 
   Future<void> addMenuItem(MenuItem item) async {
     await _db.collection('menu').add({
+      'businessId': _businessId,
       'name': item.name,
       'pricePaise': item.pricePaise,
       'category': item.category,
@@ -30,6 +33,7 @@ class MenuRepository {
 
   Future<void> updateMenuItem(MenuItem item) async {
     await _db.collection('menu').doc(item.id).set({
+      'businessId': _businessId,
       'name': item.name,
       'pricePaise': item.pricePaise,
       'category': item.category,

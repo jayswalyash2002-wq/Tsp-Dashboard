@@ -126,6 +126,10 @@ class OrderController extends Notifier<OrderControllerState> {
 
   Future<void> submit() async {
     final repo = await ref.read(orderRepositoryProvider.future);
+    if (repo == null) {
+      throw StateError('Order repository not available. Please complete business setup.');
+    }
+
     if (state.isEditing) {
       final updated = state.originalOrder!.copyWith(
         lines: state.draft.lines,
@@ -136,9 +140,9 @@ class OrderController extends Notifier<OrderControllerState> {
         paymentStatus: state.draft.paymentStatus,
         splitLines: state.draft.splitLines,
       );
-      await repo.updateOrder(state.originalOrder!, updated);
+      await repo!.updateOrder(state.originalOrder!, updated);
     } else {
-      await repo.saveOrder(state.draft);
+      await repo!.saveOrder(state.draft);
     }
     clear();
   }

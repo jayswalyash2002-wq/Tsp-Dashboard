@@ -16,11 +16,6 @@ final businessRepositoryProvider = Provider<BusinessRepository>((ref) {
   );
 });
 
-final userBusinessIdProvider = Provider<String?>((ref) {
-  final profile = ref.watch(userProfileProvider).value;
-  return profile?.businessId;
-});
-
 final currentBusinessProvider = StreamProvider<Business?>((ref) {
   final businessId = ref.watch(userBusinessIdProvider);
   if (businessId == null) return Stream.value(null);
