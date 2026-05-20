@@ -14,10 +14,11 @@ final salesReportProvider = Provider.family<SalesReportData, ReportDateRange>((r
   
   return ordersAsync.maybeWhen(
     data: (orders) {
-      final filtered = orders.where((o) => 
-        (o.timestamp.isAfter(range.start) || o.timestamp.isAtSameMomentAs(range.start)) &&
-        (o.timestamp.isBefore(range.end) || o.timestamp.isAtSameMomentAs(range.end))
-      ).toList();
+      final filtered = orders.where((o) {
+        final date = o.createdAt ?? o.timestamp;
+        return (date.isAfter(range.start) || date.isAtSameMomentAs(range.start)) &&
+               (date.isBefore(range.end) || date.isAtSameMomentAs(range.end));
+      }).toList();
 
       int totalSalesPaise = 0;
       int cashSalesPaise = 0;
@@ -90,12 +91,14 @@ final expenseReportProvider = Provider.family<ExpenseReportData, ReportDateRange
   return expensesAsync.maybeWhen(
     data: (expenses) {
       final filteredExpenses = expenses.where((e) => 
-        e.timestamp.isAfter(range.start) && e.timestamp.isBefore(range.end)
+        (e.timestamp.isAfter(range.start) || e.timestamp.isAtSameMomentAs(range.start)) &&
+        (e.timestamp.isBefore(range.end) || e.timestamp.isAtSameMomentAs(range.end))
       ).toList();
 
       final List<FundMovement> filteredFunds = fundsAsync.maybeWhen(
         data: (funds) => funds.where((f) => 
-          f.timestamp.isAfter(range.start) && f.timestamp.isBefore(range.end)
+          (f.timestamp.isAfter(range.start) || f.timestamp.isAtSameMomentAs(range.start)) &&
+          (f.timestamp.isBefore(range.end) || f.timestamp.isAtSameMomentAs(range.end))
         ).toList(),
         orElse: () => <FundMovement>[],
       );

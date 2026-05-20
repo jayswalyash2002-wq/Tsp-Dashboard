@@ -12,9 +12,9 @@ class ExpenseReportsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
-    final businessDate = ref.watch(effectiveBusinessDateProvider);
-    final start = BusinessDateUtils.getStartOfBusinessMonth(businessDate);
-    final range = ReportDateRange(start, now);
+    final start = BusinessDateUtils.getStartOfBusinessMonth(now);
+    final end = BusinessDateUtils.getEndOfBusinessMonth(now);
+    final range = ReportDateRange(start, end);
     final data = ref.watch(expenseReportProvider(range));
 
     return Scaffold(

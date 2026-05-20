@@ -61,11 +61,15 @@ class _SalesReportView extends ConsumerWidget {
 
       range = ReportDateRange(brange.start, isCurrentDay ? now : brange.end);
     } else if (period == 'weekly') {
-      final start = BusinessDateUtils.getStartOfBusinessWeek(now);
-      range = ReportDateRange(start, now);
+      range = ReportDateRange(
+        BusinessDateUtils.getStartOfBusinessWeek(now),
+        BusinessDateUtils.getEndOfBusinessWeek(now),
+      );
     } else {
-      final start = BusinessDateUtils.getStartOfBusinessMonth(now);
-      range = ReportDateRange(start, now);
+      range = ReportDateRange(
+        BusinessDateUtils.getStartOfBusinessMonth(now),
+        BusinessDateUtils.getEndOfBusinessMonth(now),
+      );
     }
 
     final data = ref.watch(salesReportProvider(range));

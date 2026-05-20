@@ -37,7 +37,7 @@ class HistoryScreen extends ConsumerWidget {
 
           for (final order in orders) {
             // Apply business day logic for grouping
-            final dateStr = BusinessDateUtils.formatBusinessDate(order.timestamp);
+            final dateStr = BusinessDateUtils.formatBusinessDate(order.createdAt ?? order.timestamp);
             groupedOrders.putIfAbsent(dateStr, () => []).add(order);
           }
 
