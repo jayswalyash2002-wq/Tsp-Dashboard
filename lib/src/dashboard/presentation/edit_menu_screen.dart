@@ -1,7 +1,10 @@
+import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dashboard_providers.dart';
 import '../domain/menu_item.dart';
+import '../../activity_log/presentation/providers/activity_log_providers.dart';
+import '../../activity_log/domain/entities/activity_log_enums.dart';
 
 class EditMenuScreen extends ConsumerWidget {
   const EditMenuScreen({super.key});
@@ -106,6 +109,17 @@ class EditMenuScreen extends ConsumerWidget {
                           sortOrder: menuItem.sortOrder,
                           categorySortOrder: menuItem.categorySortOrder,
                         ));
+                    
+                    unawaited(
+                      ref.read(logActivityUseCaseProvider).execute(
+                        action: ActivityAction.menuItemModified,
+                        category: ActivityCategory.operational,
+                        targetType: 'menuItem',
+                        targetId: menuItem.id,
+                        targetName: menuItem.name,
+                        metadata: {'available': val},
+                      ),
+                    );
                   },
                 ),
                 onTap: () => _showEditDialog(context, ref, item: menuItem),
@@ -228,16 +242,27 @@ class EditMenuScreen extends ConsumerWidget {
                   return;
                 }
                 if (item == null) {
-                  await repo.addMenuItem(MenuItem(
+                  final newItem = MenuItem(
                     id: '',
                     name: name,
                     category: cat,
                     pricePaise: price.toInt(),
                     available: true,
                     sortOrder: 999, // Will be updated by drag and drop
-                  ));
+                  );
+                  await repo.addMenuItem(newItem);
+                  
+                  unawaited(
+                    ref.read(logActivityUseCaseProvider).execute(
+                      action: ActivityAction.menuItemAdded,
+                      category: ActivityCategory.operational,
+                      targetType: 'menuItem',
+                      targetName: name,
+                      metadata: {'price': price / 100},
+                    ),
+                  );
                 } else {
-                  await repo.updateMenuItem(MenuItem(
+                  final updatedItem = MenuItem(
                     id: item.id,
                     name: name,
                     category: cat,
@@ -245,7 +270,18 @@ class EditMenuScreen extends ConsumerWidget {
                     available: item.available,
                     sortOrder: item.sortOrder,
                     categorySortOrder: item.categorySortOrder,
-                  ));
+                  );
+                  await repo.updateMenuItem(updatedItem);
+
+                  unawaited(
+                    ref.read(logActivityUseCaseProvider).execute(
+                      action: ActivityAction.menuItemModified,
+                      category: ActivityCategory.operational,
+                      targetType: 'menuItem',
+                      targetId: item.id,
+                      targetName: name,
+                    ),
+                  );
                 }
                 if (!context.mounted) return;
                 Navigator.pop(context);
@@ -279,6 +315,16 @@ class EditMenuScreen extends ConsumerWidget {
               final repo = ref.read(menuRepositoryProvider);
               if (repo != null) {
                 repo.deleteMenuItem(item.id);
+
+                unawaited(
+                  ref.read(logActivityUseCaseProvider).execute(
+                    action: ActivityAction.menuItemDeleted,
+                    category: ActivityCategory.operational,
+                    targetType: 'menuItem',
+                    targetId: item.id,
+                    targetName: item.name,
+                  ),
+                );
               }
               Navigator.pop(context);
             },

@@ -1,8 +1,11 @@
+import 'dart:async' show unawaited;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/dashboard_providers.dart';
 import '../domain/menu_item.dart';
 import '../domain/order_models.dart';
+import '../../activity_log/presentation/providers/activity_log_providers.dart';
+import '../../activity_log/domain/entities/activity_log_enums.dart';
 
 class OrderControllerState {
   OrderControllerState({
@@ -140,9 +143,31 @@ class OrderController extends Notifier<OrderControllerState> {
         paymentStatus: state.draft.paymentStatus,
         splitLines: state.draft.splitLines,
       );
-      await repo!.updateOrder(state.originalOrder!, updated);
+      await repo.updateOrder(state.originalOrder!, updated);
+
+      unawaited(
+        ref.read(logActivityUseCaseProvider).execute(
+          action: ActivityAction.orderModified,
+          category: ActivityCategory.operational,
+          targetType: 'order',
+          targetId: updated.id,
+          targetName: 'Order #${updated.id.substring(0, 4)}',
+          metadata: {'total': updated.totalPaise / 100},
+        ),
+      );
     } else {
-      await repo!.saveOrder(state.draft);
+      final orderId = await repo.saveOrder(state.draft);
+
+      unawaited(
+        ref.read(logActivityUseCaseProvider).execute(
+          action: ActivityAction.orderCreated,
+          category: ActivityCategory.operational,
+          targetType: 'order',
+          targetId: orderId,
+          targetName: 'Order #${orderId.substring(0, 4)}',
+          metadata: {'total': state.draft.totalPaise / 100},
+        ),
+      );
     }
     clear();
   }

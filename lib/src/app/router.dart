@@ -16,6 +16,7 @@ import 'package:tsp_dashboard/src/reports/presentation/expense_reports_screen.da
 import 'package:tsp_dashboard/src/reports/presentation/sales_reports_screen.dart';
 import 'package:tsp_dashboard/src/business/presentation/business_setup_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/staff_management_screen.dart';
+import 'package:tsp_dashboard/src/activity_log/presentation/screens/activity_log_screen.dart';
 import 'package:tsp_dashboard/src/app/shell_scaffold.dart';
 
 import 'package:tsp_dashboard/src/core/rbac/permission.dart';
@@ -37,6 +38,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         '/business-setup': Permission.manageBusiness,
         '/expenses': Permission.manageExpenses,
         '/staff': Permission.manageStaff,
+        '/activity-log': Permission.viewActivityLog,
       };
 
       for (final entry in routePermissions.entries) {
@@ -110,7 +112,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/business-setup',
-            builder: (context, state) => const BusinessSetupScreen(),
+            builder: (context, state) {
+              final businessId = state.uri.queryParameters['id'];
+              return BusinessSetupScreen(businessId: businessId);
+            },
+          ),
+          GoRoute(
+            path: '/activity-log',
+            builder: (context, state) => const ActivityLogScreen(),
           ),
           StatefulShellRoute.indexedStack(
             builder: (context, state, navigationShell) {

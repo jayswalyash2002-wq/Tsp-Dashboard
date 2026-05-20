@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +12,9 @@ import '../../business/data/business_providers.dart';
 import '../../memberships/data/membership_providers.dart';
 import '../../core/rbac/permission.dart';
 import '../../core/rbac/permission_gate.dart';
+import '../../activity_log/presentation/providers/activity_log_providers.dart';
+import '../../activity_log/domain/entities/activity_log_enums.dart';
+import '../../expenses/data/expense_providers.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -39,21 +43,30 @@ class ProfileScreen extends ConsumerWidget {
                       backgroundColor: Theme.of(context).colorScheme.primary,
                       child: Text(
                         _getAvatarLetter(profile?.displayName, user?.email),
-                        style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
                     const SizedBox(height: 12),
                     Text(
                       profile?.displayName ?? 'User',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     Text(
                       user?.email ?? 'No email',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
-                      ),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer
+                                .withValues(alpha: 0.7),
+                          ),
                     ),
                   ],
                 ),
@@ -109,6 +122,19 @@ class ProfileScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            PermissionGate(
+              permission: Permission.viewActivityLog,
+              child: Column(
+                children: [
+                  _Tile(
+                    title: 'Activity log',
+                    subtitle: 'Audit trail of all business actions',
+                    onTap: () => context.push('/activity-log'),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              ),
+            ),
             Consumer(
               builder: (context, ref, child) {
                 final businessId = ref.watch(userBusinessIdProvider);
@@ -117,7 +143,8 @@ class ProfileScreen extends ConsumerWidget {
                   children: [
                     _Tile(
                       title: 'Data Migration',
-                      subtitle: 'Fix missing business data from old app version',
+                      subtitle:
+                          'Fix missing business data from old app version',
                       onTap: () => _runMigration(context, ref, businessId),
                     ),
                     const SizedBox(height: 10),
@@ -136,7 +163,8 @@ class ProfileScreen extends ConsumerWidget {
                 final session = ref.watch(sessionProvider);
                 return _Tile(
                   title: 'Account info',
-                  subtitle: 'Role: ${session.role?.name.toUpperCase() ?? "Loading..."}',
+                  subtitle:
+                      'Role: ${session.role?.name.toUpperCase() ?? "Loading..."}',
                   onTap: () {},
                 );
               },
@@ -144,6 +172,13 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             FilledButton.tonal(
               onPressed: () async {
+                unawaited(
+                  ref.read(logActivityUseCaseProvider).execute(
+                    action: ActivityAction.userLoggedOut,
+                    category: ActivityCategory.authentication,
+                  ),
+                );
+
                 final repo = await ref.read(authRepositoryProvider.future);
                 await repo.signOut();
                 // Clear local device name state on logout
@@ -174,7 +209,8 @@ class ProfileScreen extends ConsumerWidget {
     return '?';
   }
 
-  Future<void> _runMigration(BuildContext context, WidgetRef ref, String businessId) async {
+  Future<void> _runMigration(
+      BuildContext context, WidgetRef ref, String businessId) async {
     final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -185,8 +221,12 @@ class ProfileScreen extends ConsumerWidget {
           'Only run this if you are missing orders or menu items from the previous version.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Run Migration')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Run Migration')),
         ],
       ),
     );
@@ -196,7 +236,7 @@ class ProfileScreen extends ConsumerWidget {
     try {
       final repo = ref.read(dataMigrationRepositoryProvider);
       final count = await repo.migrateLegacyData(businessId);
-      
+
       messenger.showSnackBar(
         SnackBar(content: Text('Migration complete! Fixed $count records.')),
       );
@@ -242,35 +282,46 @@ class _BusinessIdentityCard extends ConsumerWidget {
                         children: [
                           Text(
                             business.businessName,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           Text(
                             business.businessType,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.primary),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: cs.primary),
                           ),
                         ],
                       ),
                     ),
                   ],
                 ),
-                                const Divider(height: 24),
+                const Divider(height: 24),
                 _InfoRow(label: 'UIN', value: business.uin),
-                _InfoRow(label: 'Email', value: business.officialEmail, isVertical: true),
+                _InfoRow(
+                    label: 'Email', value: business.officialEmail, isVertical: true),
                 _InfoRow(label: 'Phone', value: business.phoneNumber),
                 if (business.address != null)
-                  _InfoRow(label: 'Address', value: business.address!, isVertical: true),
+                  _InfoRow(
+                      label: 'Address', value: business.address!, isVertical: true),
                 if (business.isGstRegistered)
-                  _InfoRow(label: 'GSTIN', value: business.gstNumber!, isVertical: true),
+                  _InfoRow(
+                      label: 'GSTIN', value: business.gstNumber!, isVertical: true),
                 const SizedBox(height: 16),
                 PermissionGate(
                   permission: Permission.accessSettings,
                   child: OutlinedButton.icon(
-                    onPressed: () => context.push('/business-setup'),
+                    onPressed: () =>
+                        context.push('/business-setup?id=${business.id}'),
                     icon: const Icon(Icons.edit, size: 16),
                     label: const Text('Edit Business Details'),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size.fromHeight(40),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
@@ -378,7 +429,30 @@ class _BusinessStatusCard extends ConsumerWidget {
     final businessDate = BusinessDateUtils.formatBusinessDate(now);
     final repo = ref.read(sessionRepositoryProvider);
     if (repo == null) return;
-    await repo.openBusiness(businessDate);
+
+    try {
+      await repo.openBusiness(businessDate);
+
+      final business = ref.read(currentBusinessProvider).value;
+      unawaited(
+        ref.read(logActivityUseCaseProvider).execute(
+          action: ActivityAction.businessOpened,
+          category: ActivityCategory.operational,
+          targetType: 'business',
+          targetId: business?.id,
+          targetName: business?.businessName,
+          metadata: {
+            'businessDate': businessDate,
+          },
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to open business: $e')),
+        );
+      }
+    }
   }
 
   void _showCloseConfirm(BuildContext context, WidgetRef ref) {
@@ -392,12 +466,42 @@ class _BusinessStatusCard extends ConsumerWidget {
               onPressed: () => Navigator.pop(context),
               child: const Text('Cancel')),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               final repo = ref.read(sessionRepositoryProvider);
               if (repo != null) {
-                repo.closeBusiness();
+                try {
+                  final session = ref.read(currentSessionProvider).value;
+                  final balances = ref.read(balancesProvider).value ?? {};
+
+                  await repo.closeBusiness();
+
+                  final business = ref.read(currentBusinessProvider).value;
+
+                  Map<String, dynamic> metadata = {
+                    'closingCash': (balances['cashBalancePaise'] ?? 0) / 100,
+                    'closingBank': (balances['bankBalancePaise'] ?? 0) / 100,
+                  };
+
+                  if (session?.openedAt != null) {
+                    final duration = DateTime.now().difference(session!.openedAt!);
+                    metadata['shiftDurationMinutes'] = duration.inMinutes;
+                  }
+
+                  unawaited(
+                    ref.read(logActivityUseCaseProvider).execute(
+                      action: ActivityAction.businessClosed,
+                      category: ActivityCategory.operational,
+                      targetType: 'business',
+                      targetId: business?.id,
+                      targetName: business?.businessName,
+                      metadata: metadata,
+                    ),
+                  );
+                } catch (e) {
+                  debugPrint('Error closing business: $e');
+                }
               }
-              Navigator.pop(context);
+              if (context.mounted) Navigator.pop(context);
             },
             child: const Text('Close', style: TextStyle(color: Colors.red)),
           ),
@@ -408,7 +512,8 @@ class _BusinessStatusCard extends ConsumerWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value, this.isVertical = false});
+  const _InfoRow(
+      {required this.label, required this.value, this.isVertical = false});
   final String label;
   final String value;
   final bool isVertical;
@@ -424,7 +529,10 @@ class _InfoRow extends StatelessWidget {
             Text(
               label,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.5),
                   ),
             ),
             const SizedBox(height: 2),
@@ -496,7 +604,8 @@ class _Tile extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: cs.onSurface.withValues(alpha: 0.7)),
+              Icon(Icons.chevron_right,
+                  color: cs.onSurface.withValues(alpha: 0.7)),
             ],
           ),
         ),

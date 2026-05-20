@@ -40,7 +40,7 @@ class SessionState {
     this.isLoaded = false,
   });
 
-  factory SessionState.empty() => SessionState(isLoaded: true);
+  factory SessionState.empty() => SessionState(isLoaded: false);
 }
 
 class SessionNotifier extends StateNotifier<SessionState> {
@@ -53,7 +53,9 @@ class SessionNotifier extends StateNotifier<SessionState> {
     required String membershipId,
     String? branchId,
   }) {
-    debugPrint('SESSION: Setting active session. Business: $businessId, Role: ${role.name}');
+    if (kDebugMode) {
+      debugPrint('SESSION: Setting active session. Business: $businessId, Role: ${role.name}');
+    }
     state = SessionState(
       businessId: businessId,
       userUid: userUid,
@@ -65,7 +67,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
   }
 
   void clear() {
-    state = SessionState(isLoaded: true);
+    state = SessionState(isLoaded: false);
   }
 }
 

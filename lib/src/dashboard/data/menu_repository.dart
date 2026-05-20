@@ -12,7 +12,9 @@ class MenuRepository {
   final String _businessId;
 
   Stream<List<MenuItem>> watchMenu() {
-    debugPrint('MENU_REPO: Watching menu for businessId: $_businessId');
+    if (kDebugMode) {
+      debugPrint('MENU_REPO: Watching menu for businessId: $_businessId');
+    }
     return _db
         .collection('menu')
         .where('businessId', isEqualTo: _businessId)
@@ -32,7 +34,9 @@ class MenuRepository {
     final uid = _auth.currentUser?.uid;
     if (uid == null) throw StateError('Not signed in');
 
-    debugPrint('MENU_REPO: Adding menu item for businessId: $_businessId');
+    if (kDebugMode) {
+      debugPrint('MENU_REPO: Adding menu item for businessId: $_businessId');
+    }
     await _db.collection('menu').add({
       'businessId': _businessId,
       'name': item.name,
@@ -51,7 +55,9 @@ class MenuRepository {
     final uid = _auth.currentUser?.uid;
     if (uid == null) throw StateError('Not signed in');
 
-    debugPrint('MENU_REPO: Updating menu item ${item.id} for businessId: $_businessId');
+    if (kDebugMode) {
+      debugPrint('MENU_REPO: Updating menu item ${item.id} for businessId: $_businessId');
+    }
     
     final docRef = _db.collection('menu').doc(item.id);
     
@@ -65,8 +71,10 @@ class MenuRepository {
       final existingBusinessId = data['businessId']?.toString();
       
       if (existingBusinessId != _businessId) {
-        debugPrint('CRITICAL: Blocked unauthorized update attempt on menu item ${item.id}. '
-            'Expected: $_businessId, Found: $existingBusinessId');
+        if (kDebugMode) {
+          debugPrint('CRITICAL: Blocked unauthorized update attempt on menu item ${item.id}. '
+              'Expected: $_businessId, Found: $existingBusinessId');
+        }
         throw Exception('Access Denied: Business ownership mismatch');
       }
 
@@ -85,7 +93,9 @@ class MenuRepository {
   }
 
   Future<void> deleteMenuItem(String id) async {
-    debugPrint('MENU_REPO: Deleting menu item $id for businessId: $_businessId');
+    if (kDebugMode) {
+      debugPrint('MENU_REPO: Deleting menu item $id for businessId: $_businessId');
+    }
     
     final docRef = _db.collection('menu').doc(id);
     
@@ -97,8 +107,10 @@ class MenuRepository {
       final existingBusinessId = data['businessId']?.toString();
       
       if (existingBusinessId != _businessId) {
-        debugPrint('CRITICAL: Blocked unauthorized delete attempt on menu item $id. '
-            'Expected: $_businessId, Found: $existingBusinessId');
+        if (kDebugMode) {
+          debugPrint('CRITICAL: Blocked unauthorized delete attempt on menu item $id. '
+              'Expected: $_businessId, Found: $existingBusinessId');
+        }
         throw Exception('Access Denied: Business ownership mismatch');
       }
 

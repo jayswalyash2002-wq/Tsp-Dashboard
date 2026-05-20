@@ -20,7 +20,9 @@ class ExpenseRepository {
   final String _businessId;
 
   Stream<List<Expense>> watchExpenses() {
-    debugPrint('EXPENSE_REPO: Watching expenses for businessId: $_businessId');
+    if (kDebugMode) {
+      debugPrint('EXPENSE_REPO: Watching expenses for businessId: $_businessId');
+    }
     return _db
         .collection('expenses')
         .where('businessId', isEqualTo: _businessId)
@@ -36,7 +38,9 @@ class ExpenseRepository {
     });
   }
 
-  Future<void> saveExpense(Expense expense) async {
+  Future<void> saveExpense(
+    Expense expense,
+  ) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) throw StateError('Not signed in');
 
@@ -45,7 +49,9 @@ class ExpenseRepository {
     final expenseRef = _db.collection('expenses').doc(expenseId);
     final balancesRef = _db.collection('balances').doc(_businessId);
 
-    debugPrint('EXPENSE_REPO: Saving expense $expenseId (new: $isNew) for businessId: $_businessId');
+    if (kDebugMode) {
+      debugPrint('EXPENSE_REPO: Saving expense $expenseId (new: $isNew) for businessId: $_businessId');
+    }
 
     await _db.runTransaction((tx) async {
       // 1. READS
@@ -58,8 +64,10 @@ class ExpenseRepository {
           final existingBusinessId = data['businessId']?.toString();
           
           if (existingBusinessId != _businessId) {
-            debugPrint('CRITICAL: Blocked unauthorized expense update attempt. '
-                'Expected: $_businessId, Found: $existingBusinessId');
+            if (kDebugMode) {
+              debugPrint('CRITICAL: Blocked unauthorized expense update attempt. '
+                  'Expected: $_businessId, Found: $existingBusinessId');
+            }
             throw Exception('Access Denied: Business ownership mismatch');
           }
           
@@ -111,11 +119,17 @@ class ExpenseRepository {
     });
   }
 
-  Future<void> deleteExpense(Expense expense) async {
+  Future<void> deleteExpense(
+    Expense expense,
+  ) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) throw StateError('Not signed in');
     final expenseRef = _db.collection('expenses').doc(expense.id);
     final balancesRef = _db.collection('balances').doc(_businessId);
 
-    debugPrint('EXPENSE_REPO: Deleting expense ${expense.id} for businessId: $_businessId');
+    if (kDebugMode) {
+      debugPrint('EXPENSE_REPO: Deleting expense ${expense.id} for businessId: $_businessId');
+    }
 
     await _db.runTransaction((tx) async {
       // 1. READS & VALIDATION
@@ -126,8 +140,10 @@ class ExpenseRepository {
       final existingBusinessId = expenseData['businessId']?.toString();
       
       if (existingBusinessId != _businessId) {
-        debugPrint('CRITICAL: Blocked unauthorized expense delete attempt. '
-            'Expected: $_businessId, Found: $existingBusinessId');
+        if (kDebugMode) {
+          debugPrint('CRITICAL: Blocked unauthorized expense delete attempt. '
+              'Expected: $_businessId, Found: $existingBusinessId');
+        }
         throw Exception('Access Denied: Business ownership mismatch');
       }
 

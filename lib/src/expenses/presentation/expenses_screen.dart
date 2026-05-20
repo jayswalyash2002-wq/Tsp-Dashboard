@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +9,11 @@ import '../../dashboard/domain/order_models.dart';
 import '../data/expense_providers.dart';
 import '../domain/expense.dart';
 import '../domain/fund_movement.dart';
+
+import '../../activity_log/presentation/providers/activity_log_providers.dart';
+import '../../activity_log/domain/entities/activity_log_enums.dart';
+import '../../memberships/data/membership_providers.dart';
+import '../../core/device/device_providers.dart';
 
 class ExpensesScreen extends ConsumerWidget {
   const ExpensesScreen({super.key});
@@ -397,7 +403,22 @@ class _ExpenseTile extends ConsumerWidget {
                 try {
                   final repo = await ref.read(expenseRepositoryProvider.future);
                   if (repo == null) throw StateError('Expense repository not available');
-                  await repo!.deleteExpense(expense);
+                  
+                  await repo.deleteExpense(
+                    expense,
+                  );
+
+                  unawaited(
+                    ref.read(logActivityUseCaseProvider).execute(
+                      action: ActivityAction.expenseDeleted,
+                      category: ActivityCategory.financial,
+                      targetType: 'expense',
+                      targetId: expense.id,
+                      targetName: expense.category,
+                      metadata: {'amount': expense.amountPaise / 100},
+                    ),
+                  );
+
                   messenger.showSnackBar(const SnackBar(content: Text('Expense deleted')));
                 } catch (e) {
                   messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -476,7 +497,7 @@ class _ExpenseFormSheetState extends ConsumerState<_ExpenseFormSheet> {
       final user = ref.read(deviceNameProvider) ?? 'User';
       final repo = await ref.read(expenseRepositoryProvider.future);
       if (repo == null) throw StateError('Expense repository not available');
-      
+
       final expense = Expense(
         id: widget.expense?.id ?? '',
         amountPaise: amount.round(),
@@ -488,7 +509,25 @@ class _ExpenseFormSheetState extends ConsumerState<_ExpenseFormSheet> {
         timestampMs: widget.expense?.timestampMs ?? DateTime.now().millisecondsSinceEpoch,
       );
 
-      await repo!.saveExpense(expense);
+      await repo.saveExpense(
+        expense,
+      );
+
+      final isNew = widget.expense == null;
+      unawaited(
+        ref.read(logActivityUseCaseProvider).execute(
+          action: isNew ? ActivityAction.expenseAdded : ActivityAction.expenseModified,
+          category: ActivityCategory.financial,
+          targetType: 'expense',
+          targetId: expense.id,
+          targetName: expense.category,
+          metadata: {
+            'amount': expense.amountPaise / 100,
+            'paymentMethod': expense.paymentMethod.name,
+          },
+        ),
+      );
+
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
@@ -605,7 +644,8 @@ class _AddFundsSheetState extends ConsumerState<_AddFundsSheet> {
     if (amountText.isEmpty) return;
     final amount = (double.tryParse(amountText) ?? 0) * 100;
     if (amount <= 0) return;
-    if (_selectedReason == null) return;
+    final reason = _selectedReason;
+    if (reason == null) return;
 
     setState(() => _busy = true);
     try {
@@ -613,12 +653,12 @@ class _AddFundsSheetState extends ConsumerState<_AddFundsSheet> {
       final deviceName = ref.read(deviceNameProvider) ?? 'Unknown device';
       final repo = ref.read(fundRepositoryProvider);
       if (repo == null) throw StateError('Fund repository not available');
-      
+
       final movement = FundMovement(
         id: '',
         type: _type,
         amountPaise: amount.round(),
-        reason: _selectedReason!,
+        reason: reason,
         notes: _notesController.text.trim(),
         createdBy: deviceName,
         createdByUid: user?.uid ?? '',
@@ -627,7 +667,23 @@ class _AddFundsSheetState extends ConsumerState<_AddFundsSheet> {
         deviceName: deviceName,
       );
 
-      await repo!.addFunds(movement);
+      await repo.addFunds(
+        movement,
+      );
+
+      unawaited(
+        ref.read(logActivityUseCaseProvider).execute(
+          action: ActivityAction.fundAdded,
+          category: ActivityCategory.financial,
+          targetType: 'fund',
+          targetName: movement.reason,
+          metadata: {
+            'amount': movement.amountPaise / 100,
+            'type': movement.type,
+          },
+        ),
+      );
+
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {

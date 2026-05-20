@@ -36,11 +36,15 @@ class AuthRepository {
     required void Function(Exception e) onVerificationFailed,
   }) async {
     try {
-      debugPrint('AUTH: Initiating Mock OTP flow for $phoneNumber');
+      if (kDebugMode) {
+        debugPrint('AUTH: Initiating Mock OTP flow for $phoneNumber');
+      }
       final verificationId = await _otpService.sendOtp(phoneNumber);
       onCodeSent(verificationId, null);
     } catch (e) {
-      debugPrint('AUTH: Mock OTP failed: $e');
+      if (kDebugMode) {
+        debugPrint('AUTH: Mock OTP failed: $e');
+      }
       onVerificationFailed(e is Exception ? e : Exception(e.toString()));
     }
   }
@@ -50,7 +54,9 @@ class AuthRepository {
     required String verificationId,
     required String smsCode,
   }) async {
-    debugPrint('AUTH: Verifying Mock OTP code: $smsCode');
+    if (kDebugMode) {
+      debugPrint('AUTH: Verifying Mock OTP code: $smsCode');
+    }
     return await _otpService.verifyOtp(verificationId, smsCode);
   }
 

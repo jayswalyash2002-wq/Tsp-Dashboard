@@ -7,5 +7,6 @@ enum Permission {
   viewReports,
   manageExpenses,
   manageBusiness,
-  accessSettings; // Added for compatibility and future use
+  accessSettings,
+  viewActivityLog;
 }

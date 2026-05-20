@@ -1,9 +1,12 @@
+import 'dart:async' show unawaited;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../data/auth_providers.dart';
+import '../../activity_log/presentation/providers/activity_log_providers.dart';
+import '../../activity_log/domain/entities/activity_log_enums.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -41,7 +44,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         password: _password.text,
       );
       
-      debugPrint('LOGIN_SCREEN: Sign in successful. Redirecting to Dashboard.');
+      unawaited(
+        ref.read(logActivityUseCaseProvider).execute(
+          action: ActivityAction.userLoggedIn,
+          category: ActivityCategory.authentication,
+        ),
+      );
+
       if (mounted) {
         context.go('/dashboard');
       }
@@ -105,8 +114,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 48),
               if (!_showLoginForm) ...[
-                // When using SingleChildScrollView, avoid Spacer() as it causes infinite height errors.
-                // Using a flexible container or padding instead.
                 const SizedBox(height: 60),
                 FilledButton(
                   onPressed: () => setState(() => _showLoginForm = true),

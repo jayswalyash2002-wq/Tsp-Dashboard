@@ -1,15 +1,15 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import '../../activity_log/domain/repositories/activity_log_repository.dart';
+import '../../activity_log/data/models/activity_log_model.dart';
 import '../domain/business.dart';
 import '../../core/utils/uin_generator.dart';
 
 class BusinessRepository {
   final FirebaseFirestore _db;
-  final FirebaseStorage _storage;
+  final ActivityLogRepository? _activityLogRepo;
 
-  BusinessRepository(this._db, this._storage);
+  BusinessRepository(this._db, [this._activityLogRepo]);
 
   Future<int> _getNextSequence(String counterName) async {
     final counterRef = _db.collection('metadata').doc('counters');
@@ -91,6 +91,7 @@ class BusinessRepository {
   Future<Business> createBusiness({
     required String uid,
     required Business business,
+    ActivityLogModel? logTemplate,
   }) async {
     // 1. Generate permanent Display UIN
     final sequence = await _getNextSequence('biz');
@@ -111,7 +112,9 @@ class BusinessRepository {
 
     final batch = _db.batch();
     
-    debugPrint('BUSINESS_REPO: Creating business $businessId and FIRST owner membership for $uid');
+    if (kDebugMode) {
+      debugPrint('BUSINESS_REPO: Creating business $businessId and FIRST owner membership for $uid');
+    }
     
     // Operation 1: Create business document
     batch.set(businessRef, {
@@ -142,6 +145,31 @@ class BusinessRepository {
       'taxEnabled': false,
       'createdAt': FieldValue.serverTimestamp(),
     });
+
+    // Operation 4: Activity Log (Atomic)
+    if (_activityLogRepo != null && logTemplate != null) {
+      final logEntry = ActivityLogModel(
+        activityLogId: '', 
+        businessId: businessId,
+        performedBy: logTemplate.performedBy,
+        performedByName: logTemplate.performedByName,
+        performedByRole: logTemplate.performedByRole,
+        action: logTemplate.action,
+        category: logTemplate.category,
+        targetType: 'business',
+        targetId: businessId,
+        targetName: finalBusiness.businessName,
+        metadata: {
+          ...logTemplate.metadata,
+          'uin': uin,
+        },
+        appVersion: logTemplate.appVersion,
+        platform: logTemplate.platform,
+      );
+      
+      final logData = _activityLogRepo.buildActivityLogBatchData(logEntry);
+      batch.set(logData.ref, logData.data);
+    }
 
     await batch.commit();
     return finalBusiness;

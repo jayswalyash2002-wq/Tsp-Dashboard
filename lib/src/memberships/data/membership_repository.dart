@@ -24,7 +24,6 @@ class MembershipRepository {
     required String createdBy,
   }) async {
     final ref = _db.collection('memberships').doc();
-    final now = DateTime.now();
     
     await ref.set({
       'uid': uid,

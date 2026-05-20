@@ -23,7 +23,9 @@ class OrderRepository {
   final String _businessId;
 
   Stream<List<SavedOrder>> watchOrders() {
-    debugPrint('ORDER_REPO: Watching orders for businessId: $_businessId');
+    if (kDebugMode) {
+      debugPrint('ORDER_REPO: Watching orders for businessId: $_businessId');
+    }
     return _db
         .collection('orders')
         .where('businessId', isEqualTo: _businessId)
@@ -46,7 +48,9 @@ class OrderRepository {
     final orderRef = _db.collection('orders').doc(orderId);
     final balancesRef = _db.collection('balances').doc(_businessId);
 
-    debugPrint('ORDER_REPO: Saving order $orderId for businessId: $_businessId');
+    if (kDebugMode) {
+      debugPrint('ORDER_REPO: Saving order $orderId for businessId: $_businessId');
+    }
 
     await _db.runTransaction((tx) async {
       // 1. PERFORM ALL READS FIRST
@@ -122,7 +126,9 @@ class OrderRepository {
     final orderRef = _db.collection('orders').doc(oldOrder.id);
     final balancesRef = _db.collection('balances').doc(_businessId);
 
-    debugPrint('ORDER_REPO: Updating order ${oldOrder.id} for businessId: $_businessId');
+    if (kDebugMode) {
+      debugPrint('ORDER_REPO: Updating order ${oldOrder.id} for businessId: $_businessId');
+    }
 
     await _db.runTransaction((tx) async {
       // 1. PERFORM ALL READS FIRST & VALIDATE
@@ -135,8 +141,10 @@ class OrderRepository {
       final existingBusinessId = orderData['businessId']?.toString();
       
       if (existingBusinessId != _businessId) {
-        debugPrint('CRITICAL: Blocked unauthorized order update attempt. '
-            'Expected: $_businessId, Found: $existingBusinessId');
+        if (kDebugMode) {
+          debugPrint('CRITICAL: Blocked unauthorized order update attempt. '
+              'Expected: $_businessId, Found: $existingBusinessId');
+        }
         throw Exception('Access Denied: Business ownership mismatch');
       }
 
@@ -207,7 +215,9 @@ class OrderRepository {
   Future<void> updateOrderStatus(String orderId, OrderStatus newStatus) async {
     final orderRef = _db.collection('orders').doc(orderId);
     
-    debugPrint('ORDER_REPO: Updating order status to ${newStatus.name} for $orderId in $_businessId');
+    if (kDebugMode) {
+      debugPrint('ORDER_REPO: Updating order status to ${newStatus.name} for $orderId in $_businessId');
+    }
 
     await _db.runTransaction((tx) async {
       final snap = await tx.get(orderRef);
@@ -215,8 +225,10 @@ class OrderRepository {
       
       final existingBusinessId = snap.data()?['businessId']?.toString();
       if (existingBusinessId != _businessId) {
-        debugPrint('CRITICAL: Blocked unauthorized order status update. '
-            'Expected: $_businessId, Found: $existingBusinessId');
+        if (kDebugMode) {
+          debugPrint('CRITICAL: Blocked unauthorized order status update. '
+              'Expected: $_businessId, Found: $existingBusinessId');
+        }
         throw Exception('Access Denied: Business ownership mismatch');
       }
 
@@ -245,7 +257,9 @@ class OrderRepository {
   }
 
   Stream<List<SavedOrder>> watchActiveKitchenOrders() {
-    debugPrint('ORDER_REPO: Watching active kitchen orders for businessId: $_businessId');
+    if (kDebugMode) {
+      debugPrint('ORDER_REPO: Watching active kitchen orders for businessId: $_businessId');
+    }
     return _db
         .collection('orders')
         .where('businessId', isEqualTo: _businessId)

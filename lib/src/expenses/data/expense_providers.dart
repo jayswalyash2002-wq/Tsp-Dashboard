@@ -13,7 +13,11 @@ final expenseRepositoryProvider = FutureProvider<ExpenseRepository?>((ref) async
 
   final db = ref.watch(firestoreProvider);
   final auth = ref.watch(firebaseAuthProvider);
-  return ExpenseRepository(db: db, auth: auth, businessId: businessId);
+  return ExpenseRepository(
+    db: db, 
+    auth: auth, 
+    businessId: businessId, 
+  );
 });
 
 final fundRepositoryProvider = Provider<FundRepository?>((ref) {
@@ -22,7 +26,11 @@ final fundRepositoryProvider = Provider<FundRepository?>((ref) {
 
   final db = ref.watch(firestoreProvider);
   final auth = ref.watch(firebaseAuthProvider);
-  return FundRepository(db: db, auth: auth, businessId: businessId);
+  return FundRepository(
+    db: db, 
+    auth: auth, 
+    businessId: businessId, 
+  );
 });
 
 final expensesProvider = StreamProvider<List<Expense>>((ref) async* {

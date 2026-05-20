@@ -74,7 +74,7 @@ class StaffManagementScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<RoleType>(
-                value: selectedRole,
+                initialValue: selectedRole,
                 decoration: const InputDecoration(labelText: 'Role'),
                 items: RoleType.values
                     .map((role) => DropdownMenuItem(

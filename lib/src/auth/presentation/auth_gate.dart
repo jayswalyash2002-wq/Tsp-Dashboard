@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,7 +12,6 @@ import 'login_screen.dart';
 import 'intent_selection_screen.dart';
 import '../../memberships/data/membership_providers.dart';
 import '../../memberships/domain/membership.dart';
-import '../../memberships/presentation/no_business_access_screen.dart';
 import '../../memberships/presentation/business_selector_screen.dart';
 import '../../business/presentation/business_setup_screen.dart';
 
@@ -76,7 +76,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       profileAsync: userProfileAsync,
     );
 
-    if (session.businessId != null) {
+    if (kDebugMode && session.businessId != null) {
       debugPrint('AUTH_GATE: Active Session detected for Business: ${session.businessId}');
     }
 
@@ -130,7 +130,9 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
     final user = authState.value;
     if (user == null) {
-      debugPrint('AUTH_GATE: No Firebase User found. Redirecting to Intent Selection.');
+      if (kDebugMode) {
+        debugPrint('AUTH_GATE: No Firebase User found. Redirecting to Intent Selection.');
+      }
       // Clear session on logout
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (ref.read(sessionProvider).businessId != null) {
@@ -140,7 +142,9 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       return _AppState.intentSelection;
     }
 
-    debugPrint('AUTH_GATE: Firebase User authenticated: ${user.uid}');
+    if (kDebugMode) {
+      debugPrint('AUTH_GATE: Firebase User authenticated: ${user.uid}');
+    }
 
     final memberships = membershipsAsync.value ?? [];
     
@@ -148,7 +152,9 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     
     // CASE A — empty result (no active memberships)
     if (memberships.isEmpty) {
-      debugPrint('AUTH_GATE: No memberships found for UID: ${user.uid}. Routing to Business Setup (Step 2)');
+      if (kDebugMode) {
+        debugPrint('AUTH_GATE: No memberships found for UID: ${user.uid}. Routing to Business Setup (Step 2)');
+      }
       return _AppState.businessSetup;
     }
 
@@ -157,7 +163,9 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       if (memberships.length == 1) {
         // CASE B: Single membership -> auto-resolve
         final m = memberships.first;
-        debugPrint('AUTH_GATE: Auto-resolving business ${m.businessId} with role ${m.role.name}');
+        if (kDebugMode) {
+          debugPrint('AUTH_GATE: Auto-resolving business ${m.businessId} with role ${m.role.name}');
+        }
         
         WidgetsBinding.instance.addPostFrameCallback((_) {
           ref.read(sessionProvider.notifier).setSession(
@@ -171,7 +179,9 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         return _AppState.loading;
       } else {
         // CASE C: Multiple memberships -> show selector
-        debugPrint('AUTH_GATE: Multiple memberships (${memberships.length}). Showing selector.');
+        if (kDebugMode) {
+          debugPrint('AUTH_GATE: Multiple memberships (${memberships.length}). Showing selector.');
+        }
         return _AppState.selectBusiness;
       }
     }
