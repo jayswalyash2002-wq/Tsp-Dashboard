@@ -3,6 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../activity_log/data/models/activity_log_model.dart';
+import '../../activity_log/domain/entities/activity_log_enums.dart';
+import '../../activity_log/domain/repositories/activity_log_repository.dart';
 import '../../auth/data/auth_repository.dart';
 import '../domain/order_models.dart';
 
@@ -11,15 +14,18 @@ class OrderRepository {
     required FirebaseFirestore db,
     required FirebaseAuth auth,
     required AuthRepository authRepo,
+    required ActivityLogRepository activityLogRepo,
     required String businessId,
   })  : _db = db,
         _auth = auth,
         _authRepo = authRepo,
+        _activityLogRepo = activityLogRepo,
         _businessId = businessId;
 
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;
   final AuthRepository _authRepo;
+  final ActivityLogRepository _activityLogRepo;
   final String _businessId;
 
   Stream<List<SavedOrder>> watchOrders() {
@@ -250,9 +256,103 @@ class OrderRepository {
           break;
         case OrderStatus.pending:
           break;
+        case OrderStatus.paid:
+          // TODO: Handle this case.
+          throw UnimplementedError();
+        case OrderStatus.cancelled:
+          // TODO: Handle this case.
+          throw UnimplementedError();
+        case OrderStatus.refunded:
+          // TODO: Handle this case.
+          throw UnimplementedError();
       }
 
       tx.update(orderRef, updates);
+    });
+  }
+
+  Future<void> cancelOrder({
+    required String orderId,
+    required String cancelledBy,
+    required String cancelledByName,
+    required String cancelledByRole,
+    required String appVersion,
+    required String platform,
+    CancellationReason? reason,
+    String? activityLogBusinessId,
+  }) async {
+    final orderRef = _db.collection('orders').doc(orderId);
+
+    await _db.runTransaction((tx) async {
+      // 1. READ current order document
+      final snap = await tx.get(orderRef);
+      if (!snap.exists) {
+        throw StateError('Order not found');
+      }
+
+      final orderData = snap.data()!;
+      final existingBusinessId = orderData['businessId']?.toString();
+
+      // Verify business ownership
+      if (existingBusinessId != _businessId) {
+        throw Exception('Access Denied: Business ownership mismatch');
+      }
+
+      final currentStatus = OrderStatus.fromString(orderData['status']);
+
+      // 2. Verify order is not already cancelled or refunded
+      if (currentStatus == OrderStatus.cancelled ||
+          currentStatus == OrderStatus.refunded) {
+        throw StateError('Order is already in a terminal state (${currentStatus.name})');
+      }
+
+      // 3. Determine if refundRequired
+      // Check both OrderStatus and PaymentStatus for safety
+      final paymentData = orderData['payment'] as Map<String, dynamic>?;
+      final paymentStatus = PaymentStatus.fromString(paymentData?['status']);
+      final bool refundRequired =
+          currentStatus == OrderStatus.paid || paymentStatus == PaymentStatus.paid;
+
+      // 4. WRITE updated order
+      tx.update(orderRef, {
+        'status': OrderStatus.cancelled.name,
+        'cancellationReason': reason?.name,
+        'cancelledBy': cancelledBy,
+        'cancelledByName': cancelledByName, // Storing name for history display
+        'cancelledAt': FieldValue.serverTimestamp(),
+        'refundRequired': refundRequired,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': cancelledBy,
+      });
+
+      // 5. WRITE activity log entry atomically
+      final items = (orderData['items'] as List<dynamic>? ?? []);
+      final firstItemName =
+          items.isNotEmpty ? items.first['name'] : 'Unknown Order';
+
+      final logEntry = ActivityLogModel(
+        activityLogId: '',
+        businessId: activityLogBusinessId ?? _businessId,
+        performedBy: cancelledBy,
+        performedByName: cancelledByName,
+        performedByRole: cancelledByRole,
+        action: ActivityAction.orderCancelled,
+        category: ActivityCategory.operational,
+        targetType: 'order',
+        targetId: orderId,
+        targetName: firstItemName,
+        metadata: {
+          'cancellationReason': reason?.name ?? 'none',
+          'refundRequired': refundRequired,
+          'orderStatus': 'cancelled',
+          'itemCount': items.length,
+        },
+        appVersion: appVersion,
+        platform: platform,
+      );
+
+      final logData = _activityLogRepo.buildActivityLogBatchData(logEntry);
+      tx.set(logData.ref, logData.data);
     });
   }
 

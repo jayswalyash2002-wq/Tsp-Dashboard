@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format/money.dart';
 import '../../core/utils/business_date_utils.dart';
-import '../../dashboard/data/dashboard_providers.dart';
 import '../data/report_providers.dart';
 import '../domain/report_models.dart';
 

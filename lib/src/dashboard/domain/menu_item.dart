@@ -8,6 +8,7 @@ class MenuItem {
     this.sortOrder = 0,
     this.categorySortOrder = 0,
     this.businessId,
+    this.isDeleted = false,
   });
 
   final String id;
@@ -18,6 +19,7 @@ class MenuItem {
   final int sortOrder;
   final int categorySortOrder;
   final String? businessId;
+  final bool isDeleted;
 
   double get price => pricePaise / 100.0;
 
@@ -33,6 +35,29 @@ class MenuItem {
       sortOrder: data['sortOrder'] ?? 0,
       categorySortOrder: data['categorySortOrder'] ?? 0,
       businessId: data['businessId']?.toString(),
+      isDeleted: data['isDeleted'] == true,
+    );
+  }
+
+  MenuItem copyWith({
+    String? name,
+    int? pricePaise,
+    String? category,
+    bool? available,
+    int? sortOrder,
+    int? categorySortOrder,
+    bool? isDeleted,
+  }) {
+    return MenuItem(
+      id: id,
+      name: name ?? this.name,
+      pricePaise: pricePaise ?? this.pricePaise,
+      category: category ?? this.category,
+      available: available ?? this.available,
+      sortOrder: sortOrder ?? this.sortOrder,
+      categorySortOrder: categorySortOrder ?? this.categorySortOrder,
+      businessId: businessId,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 }

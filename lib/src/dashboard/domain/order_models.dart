@@ -60,13 +60,47 @@ enum OrderStatus {
   pending,
   preparing,
   completed,
-  served;
+  served,
+  paid,
+  cancelled,
+  refunded;
 
   static OrderStatus fromString(String? val) {
     return OrderStatus.values.firstWhere(
       (e) => e.name == val,
       orElse: () => OrderStatus.pending,
     );
+  }
+}
+
+enum CancellationReason {
+  customerCancelled,
+  duplicateOrder,
+  wrongOrder,
+  staffMistake,
+  outOfStock,
+  other;
+
+  String get displayName {
+    switch (this) {
+      case CancellationReason.customerCancelled:
+        return 'Customer Cancelled';
+      case CancellationReason.duplicateOrder:
+        return 'Duplicate Order';
+      case CancellationReason.wrongOrder:
+        return 'Wrong Order';
+      case CancellationReason.staffMistake:
+        return 'Staff Mistake';
+      case CancellationReason.outOfStock:
+        return 'Out of Stock';
+      case CancellationReason.other:
+        return 'Other';
+    }
+  }
+
+  static CancellationReason? fromString(String? val) {
+    if (val == null) return null;
+    return CancellationReason.values.firstWhereOrNull((e) => e.name == val);
   }
 }
 
@@ -192,6 +226,10 @@ class SavedOrder extends OrderDraft {
     this.preparingAt,
     this.completedAt,
     this.servedAt,
+    this.cancellationReason,
+    this.cancelledBy,
+    this.cancelledAt,
+    this.refundRequired = false,
     required super.lines,
     required super.discountType,
     required super.discountValue,
@@ -212,6 +250,19 @@ class SavedOrder extends OrderDraft {
   final DateTime? completedAt;
   final DateTime? servedAt;
 
+  final String? cancellationReason;
+  final String? cancelledBy;
+  final DateTime? cancelledAt;
+  final bool refundRequired;
+
+  bool get isCancelled => status == OrderStatus.cancelled;
+  bool get isRefunded => status == OrderStatus.refunded;
+  bool get shouldIncludeInSales =>
+      status != OrderStatus.cancelled && status != OrderStatus.refunded;
+  bool get isPaid => paymentStatus == PaymentStatus.paid || status == OrderStatus.paid;
+  bool get isEditable =>
+      status != OrderStatus.cancelled && status != OrderStatus.refunded;
+
   factory SavedOrder.fromMap(String id, Map<String, dynamic> map) {
     final discount = map['discount'] as Map<String, dynamic>;
     final payment = map['payment'] as Map<String, dynamic>;
@@ -229,6 +280,10 @@ class SavedOrder extends OrderDraft {
       preparingAt: (map['preparingAt'] as Timestamp?)?.toDate(),
       completedAt: (map['completedAt'] as Timestamp?)?.toDate(),
       servedAt: (map['servedAt'] as Timestamp?)?.toDate(),
+      cancellationReason: map['cancellationReason'] as String?,
+      cancelledBy: map['cancelledBy'] as String?,
+      cancelledAt: (map['cancelledAt'] as Timestamp?)?.toDate(),
+      refundRequired: map['refundRequired'] ?? false,
       lines: items
           .map((i) => OrderLine(
                 item: MenuItem(
@@ -275,6 +330,10 @@ class SavedOrder extends OrderDraft {
     DateTime? preparingAt,
     DateTime? completedAt,
     DateTime? servedAt,
+    String? cancellationReason,
+    String? cancelledBy,
+    DateTime? cancelledAt,
+    bool? refundRequired,
   }) {
     return SavedOrder(
       id: id ?? this.id,
@@ -287,6 +346,10 @@ class SavedOrder extends OrderDraft {
       preparingAt: preparingAt ?? this.preparingAt,
       completedAt: completedAt ?? this.completedAt,
       servedAt: servedAt ?? this.servedAt,
+      cancellationReason: cancellationReason ?? this.cancellationReason,
+      cancelledBy: cancelledBy ?? this.cancelledBy,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
+      refundRequired: refundRequired ?? this.refundRequired,
       lines: lines ?? this.lines,
       discountType: discountType ?? this.discountType,
       discountValue: discountValue ?? this.discountValue,

@@ -172,6 +172,26 @@ class OrderController extends Notifier<OrderControllerState> {
     clear();
   }
 
+  Future<void> cancelOrder({
+    required String orderId,
+    CancellationReason? reason,
+  }) async {
+    final repo = await ref.read(orderRepositoryProvider.future);
+    if (repo == null) throw StateError('Order repository not available');
+
+    final logUseCase = ref.read(logActivityUseCaseProvider);
+
+    await repo.cancelOrder(
+      orderId: orderId,
+      cancelledBy: logUseCase.performedBy,
+      cancelledByName: logUseCase.performedByName,
+      cancelledByRole: logUseCase.performedByRole,
+      appVersion: logUseCase.appVersion,
+      platform: logUseCase.platform,
+      reason: reason,
+    );
+  }
+
   void clear() {
     state = build();
   }

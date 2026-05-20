@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../activity_log/presentation/providers/activity_log_providers.dart';
 import '../../auth/data/auth_providers.dart';
 import '../../core/firebase/firebase_providers.dart';
 import '../../core/utils/business_date_utils.dart';
@@ -29,11 +30,19 @@ final menuItemsProvider = StreamProvider<List<MenuItem>>((ref) {
 final orderRepositoryProvider = FutureProvider<OrderRepository?>((ref) async {
   final businessId = ref.watch(userBusinessIdProvider);
   if (businessId == null) return null;
-  
+
   final db = ref.watch(firestoreProvider);
   final auth = ref.watch(firebaseAuthProvider);
   final authRepo = await ref.watch(authRepositoryProvider.future);
-  return OrderRepository(db: db, auth: auth, authRepo: authRepo, businessId: businessId);
+  final activityLogRepo = ref.watch(activityLogRepositoryProvider);
+
+  return OrderRepository(
+    db: db,
+    auth: auth,
+    authRepo: authRepo,
+    activityLogRepo: activityLogRepo,
+    businessId: businessId,
+  );
 });
 
 final ordersProvider = StreamProvider<List<SavedOrder>>((ref) async* {

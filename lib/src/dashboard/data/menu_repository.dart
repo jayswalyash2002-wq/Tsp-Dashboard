@@ -18,6 +18,7 @@ class MenuRepository {
     return _db
         .collection('menu')
         .where('businessId', isEqualTo: _businessId)
+        .where('isDeleted', isNotEqualTo: true)
         .snapshots()
         .map((snap) {
       final items = snap.docs
@@ -45,6 +46,7 @@ class MenuRepository {
       'available': item.available,
       'sortOrder': item.sortOrder,
       'categorySortOrder': item.categorySortOrder,
+      'isDeleted': false,
       'createdBy': uid,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -86,6 +88,7 @@ class MenuRepository {
         'available': item.available,
         'sortOrder': item.sortOrder,
         'categorySortOrder': item.categorySortOrder,
+        'isDeleted': item.isDeleted,
         'updatedBy': uid,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -93,28 +96,29 @@ class MenuRepository {
   }
 
   Future<void> deleteMenuItem(String id) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) throw StateError('Not signed in');
+
     if (kDebugMode) {
-      debugPrint('MENU_REPO: Deleting menu item $id for businessId: $_businessId');
+      debugPrint('MENU_REPO: Soft-deleting menu item $id for businessId: $_businessId');
     }
     
     final docRef = _db.collection('menu').doc(id);
     
     await _db.runTransaction((tx) async {
       final snap = await tx.get(docRef);
-      if (!snap.exists) return; // Already deleted
+      if (!snap.exists) return;
       
       final data = snap.data()!;
-      final existingBusinessId = data['businessId']?.toString();
-      
-      if (existingBusinessId != _businessId) {
-        if (kDebugMode) {
-          debugPrint('CRITICAL: Blocked unauthorized delete attempt on menu item $id. '
-              'Expected: $_businessId, Found: $existingBusinessId');
-        }
-        throw Exception('Access Denied: Business ownership mismatch');
+      if (data['businessId'] != _businessId) {
+        throw Exception('Access Denied');
       }
 
-      tx.delete(docRef);
+      tx.update(docRef, {
+        'isDeleted': true,
+        'updatedBy': uid,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     });
   }
 }

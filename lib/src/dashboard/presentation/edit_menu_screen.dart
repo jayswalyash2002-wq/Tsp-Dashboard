@@ -6,34 +6,53 @@ import '../domain/menu_item.dart';
 import '../../activity_log/presentation/providers/activity_log_providers.dart';
 import '../../activity_log/domain/entities/activity_log_enums.dart';
 
+// Provider to track which categories are expanded in the menu editor
+final expandedCategoriesProvider = StateProvider<Set<String>>((ref) => <String>{});
+
 class EditMenuScreen extends ConsumerWidget {
   const EditMenuScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final menuAsync = ref.watch(menuItemsProvider);
+    final expandedCategories = ref.watch(expandedCategoriesProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit Menu'),
+        title: const Text('Menu Management'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => _showEditDialog(context, ref),
+          // Global button ONLY for creating new categories
+          TextButton.icon(
+            onPressed: () => _showAddCategoryDialog(context, ref),
+            icon: const Icon(Icons.create_new_folder_outlined),
+            label: const Text('Add Category'),
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: menuAsync.when(
         data: (items) {
           if (items.isEmpty) {
-            return const Center(child: Text('Menu is empty. Add items above.'));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Your menu is empty.'),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddCategoryDialog(context, ref),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Create First Category'),
+                  ),
+                ],
+              ),
+            );
           }
 
           // 1. Group menu items by category.
           final grouped = <String, List<MenuItem>>{};
           for (final item in items) {
-            final cat =
-                item.category.trim().isEmpty ? 'Uncategorized' : item.category;
+            final cat = item.category.trim().isEmpty ? 'Uncategorized' : item.category;
             grouped.putIfAbsent(cat, () => []).add(item);
           }
 
@@ -47,83 +66,57 @@ class EditMenuScreen extends ConsumerWidget {
             ..sort((a, b) {
               final orderA = grouped[a]?.firstOrNull?.categorySortOrder ?? 0;
               final orderB = grouped[b]?.firstOrNull?.categorySortOrder ?? 0;
-              return orderA.compareTo(orderB);
+              final res = orderA.compareTo(orderB);
+              if (res != 0) return res;
+              return a.compareTo(b);
             });
 
-          // 4. Flatten the structure for ReorderableListView.
+          // 4. Flatten the structure for ReorderableListView, respecting expansion state.
           final flattened = <dynamic>[];
           for (final cat in sortedCategories) {
             flattened.add(cat);
-            flattened.addAll(grouped[cat]!);
+            if (expandedCategories.contains(cat)) {
+              flattened.addAll(grouped[cat]!);
+            }
           }
 
           return ReorderableListView.builder(
             itemCount: flattened.length,
             buildDefaultDragHandles: false,
-            onReorder: (oldIndex, newIndex) =>
-                _onReorder(ref, flattened, oldIndex, newIndex),
+            padding: const EdgeInsets.only(bottom: 80),
+            onReorder: (oldIndex, newIndex) => _onReorder(ref, flattened, oldIndex, newIndex),
             itemBuilder: (context, index) {
-              final item = flattened[index];
+              final node = flattened[index];
 
-              if (item is String) {
-                return Container(
-                  key: ValueKey('cat_$item'),
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: ListTile(
-                    title: Text(
-                      item,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                    ),
-                    trailing: ReorderableDragStartListener(
-                      index: index,
-                      child: const Icon(Icons.drag_handle),
-                    ),
-                  ),
+              if (node is String) {
+                final isExpanded = expandedCategories.contains(node);
+                return _CategoryHeader(
+                  key: ValueKey('cat_$node'),
+                  name: node,
+                  isExpanded: isExpanded,
+                  index: index,
+                  onToggle: () {
+                    final current = ref.read(expandedCategoriesProvider);
+                    if (isExpanded) {
+                      ref.read(expandedCategoriesProvider.notifier).state =
+                          current.where((c) => c != node).toSet();
+                    } else {
+                      ref.read(expandedCategoriesProvider.notifier).state = {...current, node};
+                    }
+                  },
+                  onAddItem: () => _showEditDialog(context, ref, initialCategory: node),
+                  onDelete: () => _showDeleteCategoryConfirm(context, ref, node, grouped[node] ?? []),
                 );
               }
 
-              final menuItem = item as MenuItem;
-              return ListTile(
+              final menuItem = node as MenuItem;
+              return _MenuItemTile(
                 key: ValueKey(menuItem.id),
-                leading: ReorderableDragStartListener(
-                  index: index,
-                  child: const Icon(Icons.drag_handle),
-                ),
-                title: Text(menuItem.name),
-                subtitle: Text(
-                    'Rs. ${(menuItem.pricePaise / 100).toStringAsFixed(0)}'),
-                trailing: Switch(
-                  value: menuItem.available,
-                  onChanged: (val) {
-                    final repo = ref.read(menuRepositoryProvider);
-                    if (repo == null) return;
-                    repo.updateMenuItem(MenuItem(
-                          id: menuItem.id,
-                          name: menuItem.name,
-                          pricePaise: menuItem.pricePaise,
-                          category: menuItem.category,
-                          available: val,
-                          sortOrder: menuItem.sortOrder,
-                          categorySortOrder: menuItem.categorySortOrder,
-                        ));
-                    
-                    unawaited(
-                      ref.read(logActivityUseCaseProvider).execute(
-                        action: ActivityAction.menuItemModified,
-                        category: ActivityCategory.operational,
-                        targetType: 'menuItem',
-                        targetId: menuItem.id,
-                        targetName: menuItem.name,
-                        metadata: {'available': val},
-                      ),
-                    );
-                  },
-                ),
+                item: menuItem,
+                index: index,
                 onTap: () => _showEditDialog(context, ref, item: menuItem),
-                onLongPress: () => _showDeleteConfirm(context, ref, menuItem),
+                onDelete: () => _showDeleteConfirm(context, ref, menuItem),
+                onStatusChange: (val) => _updateItemStatus(ref, menuItem, val),
               );
             },
           );
@@ -134,23 +127,44 @@ class EditMenuScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _onReorder(
-      WidgetRef ref, List<dynamic> list, int oldIndex, int newIndex) async {
+  void _updateItemStatus(WidgetRef ref, MenuItem item, bool val) {
+    final repo = ref.read(menuRepositoryProvider);
+    if (repo == null) return;
+    repo.updateMenuItem(MenuItem(
+      id: item.id,
+      name: item.name,
+      pricePaise: item.pricePaise,
+      category: item.category,
+      available: val,
+      sortOrder: item.sortOrder,
+      categorySortOrder: item.categorySortOrder,
+    ));
+
+    unawaited(
+      ref.read(logActivityUseCaseProvider).execute(
+            action: ActivityAction.menuItemModified,
+            category: ActivityCategory.operational,
+            targetType: 'menuItem',
+            targetId: item.id,
+            targetName: item.name,
+            metadata: {'available': val},
+          ),
+    );
+  }
+
+  Future<void> _onReorder(WidgetRef ref, List<dynamic> list, int oldIndex, int newIndex) async {
     if (oldIndex < newIndex) {
       newIndex -= 1;
     }
 
     final item = list.removeAt(oldIndex);
 
-    // If we are moving a category, we must also move all items in that category.
+    // If moving a category, we must also move all items in that category (if they are in the list)
     if (item is String) {
       final itemsToMove = <MenuItem>[];
-      // Collect items that were immediately after the category header
       while (oldIndex < list.length && list[oldIndex] is MenuItem) {
         itemsToMove.add(list.removeAt(oldIndex) as MenuItem);
       }
-
-      // Ensure newIndex is still valid after removals
       final targetIndex = newIndex.clamp(0, list.length);
       list.insert(targetIndex, item);
       list.insertAll(targetIndex + 1, itemsToMove);
@@ -158,7 +172,7 @@ class EditMenuScreen extends ConsumerWidget {
       list.insert(newIndex, item);
     }
 
-    // Now re-calculate all sort orders and update Firestore.
+    // Persist changes to Firestore
     final repo = ref.read(menuRepositoryProvider);
     if (repo == null) return;
     String currentCategory = 'Uncategorized';
@@ -180,7 +194,6 @@ class EditMenuScreen extends ConsumerWidget {
           sortOrder: itemOrder++,
           categorySortOrder: catOrder,
         );
-        // Only update if something changed to save writes
         if (updatedItem.sortOrder != element.sortOrder ||
             updatedItem.categorySortOrder != element.categorySortOrder ||
             updatedItem.category != element.category) {
@@ -190,27 +203,60 @@ class EditMenuScreen extends ConsumerWidget {
     }
   }
 
-  void _showEditDialog(BuildContext context, WidgetRef ref, {MenuItem? item}) {
+  void _showAddCategoryDialog(BuildContext context, WidgetRef ref) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('New Category'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Category Name',
+            hintText: 'e.g. Beverages, Mains, Desserts',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final name = controller.text.trim();
+              if (name.isEmpty) return;
+              Navigator.pop(context);
+              // After submitting category name, immediately open Add Item for that category
+              _showEditDialog(context, ref, initialCategory: name);
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditDialog(BuildContext context, WidgetRef ref, {MenuItem? item, String? initialCategory}) {
     final nameController = TextEditingController(text: item?.name);
-    final categoryController = TextEditingController(text: item?.category);
-    final priceController = TextEditingController(
-        text: item != null ? (item.pricePaise / 100).toStringAsFixed(0) : '');
+    final categoryController = TextEditingController(text: item?.category ?? initialCategory);
+    final priceController =
+        TextEditingController(text: item != null ? (item.pricePaise / 100).toStringAsFixed(0) : '');
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(item == null ? 'Add Item' : 'Edit Item'),
+        title: Text(item == null ? 'Add Item to ${initialCategory ?? "Menu"}' : 'Edit Item'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(labelText: 'Name'),
+              autofocus: item == null,
+              decoration: const InputDecoration(labelText: 'Item Name'),
             ),
-            TextField(
-              controller: categoryController,
-              decoration: const InputDecoration(labelText: 'Category'),
-            ),
+            if (initialCategory == null)
+              TextField(
+                controller: categoryController,
+                decoration: const InputDecoration(labelText: 'Category'),
+              ),
             TextField(
               controller: priceController,
               decoration: const InputDecoration(labelText: 'Price (Rs.)'),
@@ -226,21 +272,11 @@ class EditMenuScreen extends ConsumerWidget {
               final cat = categoryController.text.trim();
               final price = (double.tryParse(priceController.text) ?? 0) * 100;
 
-              if (name.isEmpty || cat.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please fill all fields')),
-                );
-                return;
-              }
+              if (name.isEmpty || cat.isEmpty) return;
 
               try {
                 final repo = ref.read(menuRepositoryProvider);
-                if (repo == null) {
-                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Menu repository not available')),
-                  );
-                  return;
-                }
+                if (repo == null) return;
                 if (item == null) {
                   final newItem = MenuItem(
                     id: '',
@@ -248,18 +284,17 @@ class EditMenuScreen extends ConsumerWidget {
                     category: cat,
                     pricePaise: price.toInt(),
                     available: true,
-                    sortOrder: 999, // Will be updated by drag and drop
+                    sortOrder: 999,
                   );
                   await repo.addMenuItem(newItem);
-                  
                   unawaited(
                     ref.read(logActivityUseCaseProvider).execute(
-                      action: ActivityAction.menuItemAdded,
-                      category: ActivityCategory.operational,
-                      targetType: 'menuItem',
-                      targetName: name,
-                      metadata: {'price': price / 100},
-                    ),
+                          action: ActivityAction.menuItemAdded,
+                          category: ActivityCategory.operational,
+                          targetType: 'menuItem',
+                          targetName: name,
+                          metadata: {'price': price / 100, 'category': cat},
+                        ),
                   );
                 } else {
                   final updatedItem = MenuItem(
@@ -272,30 +307,57 @@ class EditMenuScreen extends ConsumerWidget {
                     categorySortOrder: item.categorySortOrder,
                   );
                   await repo.updateMenuItem(updatedItem);
-
                   unawaited(
                     ref.read(logActivityUseCaseProvider).execute(
-                      action: ActivityAction.menuItemModified,
-                      category: ActivityCategory.operational,
-                      targetType: 'menuItem',
-                      targetId: item.id,
-                      targetName: name,
-                    ),
+                          action: ActivityAction.menuItemModified,
+                          category: ActivityCategory.operational,
+                          targetType: 'menuItem',
+                          targetId: item.id,
+                          targetName: name,
+                        ),
                   );
                 }
                 if (!context.mounted) return;
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Menu updated successfully')),
-                );
+                // Expand category automatically when adding new item
+                final currentExpanded = ref.read(expandedCategoriesProvider);
+                ref.read(expandedCategoriesProvider.notifier).state = {...currentExpanded, cat};
               } catch (e) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error saving menu: $e')),
-                );
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
               }
             },
             child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteCategoryConfirm(BuildContext context, WidgetRef ref, String category, List<MenuItem> items) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete $category?'),
+        content: Text(items.isEmpty
+            ? 'Are you sure you want to delete this empty category?'
+            : 'This will delete the category and all ${items.length} items inside it. This action cannot be easily undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              final repo = ref.read(menuRepositoryProvider);
+              if (repo != null) {
+                for (final item in items) {
+                  await repo.deleteMenuItem(item.id);
+                }
+              }
+              if (context.mounted) Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Category $category deleted')),
+              );
+            },
+            child: const Text('Delete All', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -315,21 +377,183 @@ class EditMenuScreen extends ConsumerWidget {
               final repo = ref.read(menuRepositoryProvider);
               if (repo != null) {
                 repo.deleteMenuItem(item.id);
-
                 unawaited(
                   ref.read(logActivityUseCaseProvider).execute(
-                    action: ActivityAction.menuItemDeleted,
-                    category: ActivityCategory.operational,
-                    targetType: 'menuItem',
-                    targetId: item.id,
-                    targetName: item.name,
-                  ),
+                        action: ActivityAction.menuItemDeleted,
+                        category: ActivityCategory.operational,
+                        targetType: 'menuItem',
+                        targetId: item.id,
+                        targetName: item.name,
+                      ),
                 );
               }
               Navigator.pop(context);
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryHeader extends StatelessWidget {
+  const _CategoryHeader({
+    super.key,
+    required this.name,
+    required this.isExpanded,
+    required this.onToggle,
+    required this.onAddItem,
+    required this.onDelete,
+    required this.index,
+  });
+
+  final String name;
+  final bool isExpanded;
+  final VoidCallback onToggle;
+  final VoidCallback onAddItem;
+  final VoidCallback onDelete;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+        border: Border(bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.2))),
+      ),
+      child: ListTile(
+        onTap: onToggle,
+        leading: Icon(
+          isExpanded ? Icons.expand_more : Icons.chevron_right,
+          color: cs.primary,
+        ),
+        title: Text(
+          name.toUpperCase(),
+          style: TextStyle(fontWeight: FontWeight.w900, color: cs.primary, letterSpacing: 1.1, fontSize: 13),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.add_circle_outline, size: 20),
+              onPressed: onAddItem,
+              tooltip: 'Add item to $name',
+            ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
+              onSelected: (val) {
+                if (val == 'delete') onDelete();
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_sweep_outlined, size: 20, color: cs.error),
+                      const SizedBox(width: 12),
+                      Text('Delete Category', style: TextStyle(color: cs.error)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            ReorderableDragStartListener(
+              index: index,
+              child: const Icon(Icons.drag_handle, color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuItemTile extends StatelessWidget {
+  const _MenuItemTile({
+    super.key,
+    required this.item,
+    required this.index,
+    required this.onTap,
+    required this.onDelete,
+    required this.onStatusChange,
+  });
+
+  final MenuItem item;
+  final int index;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+  final ValueChanged<bool> onStatusChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ListTile(
+      contentPadding: const EdgeInsets.only(left: 56, right: 8),
+      onTap: onTap,
+      title: Text(
+        item.name,
+        style: TextStyle(
+          fontWeight: FontWeight.w500,
+          color: item.available ? null : cs.onSurface.withValues(alpha: 0.4),
+          decoration: item.available ? null : TextDecoration.lineThrough,
+        ),
+      ),
+      subtitle: Text(
+        'Rs. ${(item.pricePaise / 100).toStringAsFixed(0)}',
+        style: TextStyle(
+          color: item.available ? null : cs.onSurface.withValues(alpha: 0.3),
+        ),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Availability toggle (Primary Action)
+          Transform.scale(
+            scale: 0.8,
+            child: Switch.adaptive(
+              value: item.available,
+              onChanged: onStatusChange,
+              activeColor: cs.primary,
+            ),
+          ),
+          // Actions Menu
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
+            onSelected: (val) {
+              if (val == 'delete') onDelete();
+              if (val == 'edit') onTap();
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, size: 20),
+                    SizedBox(width: 12),
+                    Text('Edit Item'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline, size: 20, color: cs.error),
+                    const SizedBox(width: 12),
+                    Text('Delete Item', style: TextStyle(color: cs.error)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          ReorderableDragStartListener(
+            index: index,
+            child: const Icon(Icons.drag_handle, color: Colors.grey, size: 20),
+          ),
+          const SizedBox(width: 8),
         ],
       ),
     );

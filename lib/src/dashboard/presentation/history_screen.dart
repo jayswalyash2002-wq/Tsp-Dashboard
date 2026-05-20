@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
+import 'widgets/cancellation_dialog.dart';
 import '../../core/utils/business_date_utils.dart';
 import '../application/order_controller.dart';
 import '../data/dashboard_providers.dart';
@@ -98,54 +99,72 @@ class _OrderTile extends StatelessWidget {
     final fmt = DateFormat('MMM dd, hh:mm a');
     final cs = Theme.of(context).colorScheme;
 
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          _showOrderDetails(context, order);
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
+    return Opacity(
+      opacity: order.isCancelled ? 0.7 : 1.0,
+      child: Card(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            _showOrderDetails(context, order);
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      fmt.format(order.timestamp),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    if (order.isCancelled)
+                      const _CancelledBadge()
+                    else
+                      _StatusChip(status: order.paymentStatus),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  order.lines.map((l) => '${l.qty}x ${l.item.name}').join(', '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                if (order.isCancelled && order.cancellationReason != null) ...[
+                  const SizedBox(height: 4),
                   Text(
-                    fmt.format(order.timestamp),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  _StatusChip(status: order.paymentStatus),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                order.lines.map((l) => '${l.qty}x ${l.item.name}').join(', '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${order.paymentMethod.name.toUpperCase()} • ${order.deviceName}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: cs.onSurface.withValues(alpha: 0.6),
+                    'Reason: ${CancellationReason.fromString(order.cancellationReason)?.displayName ?? order.cancellationReason}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.red.shade700,
+                      fontStyle: FontStyle.italic,
                     ),
                   ),
-                  Text(
-                    'Rs. ${formatRupeesFromPaise(order.totalPaise)}',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: cs.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
                 ],
-              ),
-            ],
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${order.paymentMethod.name.toUpperCase()} • ${order.deviceName}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: cs.onSurface.withValues(alpha: 0.6),
+                          ),
+                    ),
+                    Text(
+                      'Rs. ${formatRupeesFromPaise(order.totalPaise)}',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: order.isCancelled ? cs.outline : cs.primary,
+                            fontWeight: FontWeight.bold,
+                            decoration: order.isCancelled ? TextDecoration.lineThrough : null,
+                          ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -157,6 +176,29 @@ class _OrderTile extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       builder: (context) => _OrderDetailsSheet(order: order),
+    );
+  }
+}
+
+class _CancelledBadge extends StatelessWidget {
+  const _CancelledBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.red.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Text(
+        'CANCELLED',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: Colors.red,
+        ),
+      ),
     );
   }
 }
@@ -231,6 +273,62 @@ class _OrderDetailsSheet extends ConsumerWidget {
           ),
           const Divider(),
           const SizedBox(height: 16),
+          if (order.isCancelled) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.cancel, color: Colors.red, size: 20),
+                      SizedBox(width: 8),
+                      Text('ORDER CANCELLED',
+                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (order.cancellationReason != null)
+                    Text(
+                      'Reason: ${CancellationReason.fromString(order.cancellationReason)?.displayName ?? order.cancellationReason}',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  if (order.cancelledAt != null)
+                    Text(
+                      'At: ${DateFormat('MMM dd, hh:mm a').format(order.cancelledAt!)}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  if (order.refundRequired)
+                    Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 16),
+                          SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Refund may be required',
+                              style: TextStyle(fontSize: 11, color: Colors.brown, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           ...order.lines.map((l) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
@@ -260,18 +358,50 @@ class _OrderDetailsSheet extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 32),
-          FilledButton.icon(
-            onPressed: () {
-              ref.read(orderControllerProvider.notifier).editOrder(order);
-              Navigator.pop(context);
-              context.go('/dashboard');
-            },
-            icon: const Icon(Icons.edit),
-            label: const Text('Edit Order'),
-          ),
+          if (order.isCancelled)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'This order is read-only because it was cancelled.',
+                  style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
+                ),
+              ),
+            )
+          else ...[
+            FilledButton.icon(
+              onPressed: () {
+                ref.read(orderControllerProvider.notifier).editOrder(order);
+                Navigator.pop(context);
+                context.go('/dashboard');
+              },
+              icon: const Icon(Icons.edit),
+              label: const Text('Edit Order'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _showCancellationDialog(context, ref, order);
+              },
+              icon: const Icon(Icons.cancel_outlined),
+              label: const Text('Cancel Order'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Colors.red),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
         ],
       ),
+    );
+  }
+
+  void _showCancellationDialog(BuildContext context, WidgetRef ref, SavedOrder order) {
+    showDialog(
+      context: context,
+      builder: (context) => CancellationDialog(order: order),
     );
   }
 }

@@ -15,6 +15,7 @@ final salesReportProvider = Provider.family<SalesReportData, ReportDateRange>((r
   return ordersAsync.maybeWhen(
     data: (orders) {
       final filtered = orders.where((o) {
+        if (!o.shouldIncludeInSales) return false;
         final date = o.createdAt ?? o.timestamp;
         return (date.isAfter(range.start) || date.isAtSameMomentAs(range.start)) &&
                (date.isBefore(range.end) || date.isAtSameMomentAs(range.end));

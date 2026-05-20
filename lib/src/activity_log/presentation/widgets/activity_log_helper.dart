@@ -36,7 +36,7 @@ extension ActivityLogEntryX on ActivityLogEntry {
       case ActivityAction.orderModified:
         return 'Modified order: $targetId';
       case ActivityAction.orderCancelled:
-        return 'Cancelled order: $targetId';
+        return 'Cancelled order: $targetName';
       case ActivityAction.orderCompleted:
         return 'Order completed';
       case ActivityAction.expenseAdded:
