@@ -133,12 +133,6 @@ class ProfileScreen extends ConsumerWidget {
                     onTap: () => context.push('/activity-log'),
                   ),
                   const SizedBox(height: 10),
-                  _Tile(
-                    title: 'Export Activity Log',
-                    subtitle: 'Generate PDF of recent activities',
-                    onTap: () => _exportActivityLog(context, ref),
-                  ),
-                  const SizedBox(height: 10),
                 ],
               ),
             ),
@@ -187,59 +181,6 @@ class ProfileScreen extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  Future<void> _exportActivityLog(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-
-    // Show loading
-    if (!context.mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      final business = ref.read(currentBusinessProvider).value;
-      final businessId = ref.read(userBusinessIdProvider);
-
-      if (businessId == null) throw 'No business selected';
-
-      final useCase = ref.read(getActivityLogUseCaseProvider);
-      final result = await useCase(businessId: businessId);
-
-      if (context.mounted) Navigator.pop(context); // hide loading
-
-      if (result.entries.isEmpty) {
-        messenger.showSnackBar(const SnackBar(content: Text('No logs found to export')));
-        return;
-      }
-
-      final exportResult = await ActivityLogExportService.exportToPdf(
-        entries: result.entries,
-        business: business,
-      );
-
-      if (exportResult.success) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(exportResult.message),
-            action: exportResult.path != null
-                ? SnackBarAction(
-                    label: 'Open',
-                    onPressed: () => ActivityLogExportService.openFile(exportResult.path!),
-                  )
-                : null,
-          ),
-        );
-      } else if (exportResult.message != 'Export cancelled') {
-        messenger.showSnackBar(SnackBar(content: Text(exportResult.message)));
-      }
-    } catch (e) {
-      if (context.mounted) Navigator.pop(context); // hide loading
-      messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
-    }
   }
 
   String _getAvatarLetter(String? displayName, String? email) {

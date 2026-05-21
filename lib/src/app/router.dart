@@ -16,8 +16,12 @@ import 'package:tsp_dashboard/src/reports/presentation/expense_reports_screen.da
 import 'package:tsp_dashboard/src/reports/presentation/sales_reports_screen.dart';
 import 'package:tsp_dashboard/src/business/presentation/business_setup_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/staff_management_screen.dart';
+import 'package:tsp_dashboard/src/features/staff/presentation/add_staff_screen.dart';
+import 'package:tsp_dashboard/src/features/staff/presentation/invite_code_screen.dart';
+import 'package:tsp_dashboard/src/features/staff/presentation/pending_invites_screen.dart';
 import 'package:tsp_dashboard/src/activity_log/presentation/screens/activity_log_screen.dart';
 import 'package:tsp_dashboard/src/app/shell_scaffold.dart';
+import 'package:tsp_dashboard/src/constants/roles.dart'; // Added for extra param casting
 
 import 'package:tsp_dashboard/src/core/rbac/permission.dart';
 import 'package:tsp_dashboard/src/core/rbac/permission_manager.dart';
@@ -85,6 +89,27 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/staff',
             builder: (context, state) => const StaffManagementScreen(),
+            routes: [
+              GoRoute(
+                path: 'add',
+                builder: (context, state) => const AddStaffScreen(),
+              ),
+              GoRoute(
+                path: 'pending',
+                builder: (context, state) => const PendingInvitesScreen(),
+              ),
+              GoRoute(
+                path: 'invite-code',
+                builder: (context, state) {
+                  final extra = state.extra as Map<String, dynamic>;
+                  return InviteCodeScreen(
+                    code: extra['code'] as String,
+                    role: extra['role'] as Role,
+                    name: extra['name'] as String,
+                  );
+                },
+              ),
+            ],
           ),
           GoRoute(
             path: '/edit-menu',
