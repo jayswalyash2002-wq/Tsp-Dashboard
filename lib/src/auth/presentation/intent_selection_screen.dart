@@ -12,9 +12,13 @@ class IntentSelectionScreen extends ConsumerWidget {
     final user = ref.watch(authStateChangesProvider).value;
 
     return Scaffold(
+      appBar: AppBar(
+        leading: Navigator.canPop(context) ? const BackButton() : null,
+        backgroundColor: Colors.transparent,
+      ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

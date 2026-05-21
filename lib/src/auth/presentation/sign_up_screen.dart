@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../data/auth_providers.dart';
+import '../../core/firebase/firebase_providers.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key});
@@ -19,14 +21,68 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _busy = false;
+  bool _obscurePassword = true;
+  
+  String? _initialEmail;
+  String? _initialPhone;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController.addListener(_updateState);
+    _phoneController.addListener(_updateState);
+    _emailController.addListener(_updateState);
+    _passwordController.addListener(_updateState);
+  }
+
+  void _updateState() => setState(() {});
 
   @override
   void dispose() {
+    _nameController.removeListener(_updateState);
+    _phoneController.removeListener(_updateState);
+    _emailController.removeListener(_updateState);
+    _passwordController.removeListener(_updateState);
     _nameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  bool get _isFormValid {
+    final name = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
+    final email = _emailController.text.trim();
+    final p = _passwordController.text;
+
+    if (name.isEmpty) return false;
+    if (phone.length < 10) return false;
+    if (email.isEmpty || !email.contains('@')) return false;
+
+    // Password is always required and must meet complexity rules
+    if (p.length < 8 || 
+        !p.contains(RegExp(r'[A-Z]')) || 
+        !p.contains(RegExp(r'[a-z]')) || 
+        !p.contains(RegExp(r'\d')) || 
+        !p.contains(RegExp(r'[@$!%*?&]'))) {
+      return false;
+    }
+
+    return true;
+  }
+
+  bool get _needsVerification {
+    final user = ref.read(firebaseAuthProvider).currentUser;
+    if (user == null) return true;
+    
+    if (_initialEmail != null && _initialPhone != null) {
+      return _emailController.text.trim() != _initialEmail ||
+             _phoneController.text.trim() != _initialPhone;
+    }
+    
+    return true; 
   }
 
   void _submit() async {
@@ -36,6 +92,22 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     final phone = _phoneController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
+
+    final user = ref.read(firebaseAuthProvider).currentUser;
+
+    if (user != null && !_needsVerification) {
+      setState(() => _busy = true);
+      try {
+        final db = ref.read(firestoreProvider);
+        await db.collection('users').doc(user.uid).update({'displayName': name});
+        if (mounted) context.pushReplacement('/business-setup');
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+      return;
+    }
 
     setState(() => _busy = true);
     
@@ -47,8 +119,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         onCodeSent: (verificationId, resendToken) {
           if (!mounted) return;
           setState(() => _busy = false);
-          
-          debugPrint('SIGNUP: Navigating to OTP with VerificationID: $verificationId');
           
           context.push(
             Uri(
@@ -83,8 +153,37 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(firebaseAuthProvider).currentUser;
+    
+    if (user != null && !_initialized) {
+      // Fetch profile data once when user is detected
+      ref.read(firestoreProvider).collection('users').doc(user.uid).get().then((doc) {
+        if (mounted && doc.exists) {
+          final data = doc.data()!;
+          setState(() {
+            _initialEmail = data['email'] as String?;
+            _initialPhone = data['phoneNumber'] as String?;
+            _nameController.text = data['displayName'] as String? ?? '';
+            _emailController.text = _initialEmail ?? '';
+            _phoneController.text = _initialPhone ?? '';
+            _initialized = true;
+          });
+        }
+      });
+    }
+
+    final p = _passwordController.text;
+    final hasMinLength = p.length >= 8;
+    final hasUppercase = p.contains(RegExp(r'[A-Z]'));
+    final hasLowercase = p.contains(RegExp(r'[a-z]'));
+    final hasDigits = p.contains(RegExp(r'\d'));
+    final hasSpecialCharacters = p.contains(RegExp(r'[@$!%*?&]'));
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Account')),
+      appBar: AppBar(
+        leading: const BackButton(),
+        title: Text(user == null ? 'Create Account' : 'Confirm Details'),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Form(
@@ -92,13 +191,15 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                'Tell us about yourself',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              Text(
+                user == null ? 'Step 1: Account Creation' : 'Step 1: Confirm Details',
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
-                'We will send a verification code to your mobile number.',
+                user == null 
+                  ? 'Tell us about yourself. We will send a verification code to your mobile number.'
+                  : 'Review your details. If you change your email or phone, you will need to re-verify.',
                 style: TextStyle(color: Colors.grey[600]),
               ),
               const SizedBox(height: 32),
@@ -133,31 +234,84 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 ),
                 validator: (v) => v == null || !v.contains('@') ? 'Enter valid email' : null,
               ),
+              const SizedBox(height: 8),
+              Text(
+                'This email will be used to sign in to your business account. It cannot be changed later without re-authentication.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.amber[400],
+                ),
+              ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _passwordController,
-                obscureText: true,
+                obscureText: _obscurePassword,
                 decoration: InputDecoration(
                   labelText: 'Password',
                   prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                  ),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                validator: (v) => v == null || v.length < 6 ? 'Minimum 6 characters' : null,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Required';
+                  final regex = RegExp(r'^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$');
+                  if (!regex.hasMatch(v)) {
+                    return 'Password must contain:\n• Minimum 8 characters\n• At least 1 uppercase letter\n• At least 1 lowercase letter\n• At least 1 number\n• At least 1 special character';
+                  }
+                  return null;
+                },
               ),
+              const SizedBox(height: 12),
+              const Text(
+                'Password must contain:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey),
+              ),
+              const SizedBox(height: 8),
+              _RequirementItem('Minimum 8 characters', hasMinLength),
+              _RequirementItem('At least 1 uppercase letter', hasUppercase),
+              _RequirementItem('At least 1 lowercase letter', hasLowercase),
+              _RequirementItem('At least 1 number', hasDigits),
+              _RequirementItem('At least 1 special character', hasSpecialCharacters),
               const SizedBox(height: 40),
               FilledButton(
-                onPressed: _busy ? null : _submit,
+                onPressed: (_busy || !_isFormValid) ? null : _submit,
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(60),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 ),
                 child: _busy 
                   ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Send Verification Code'),
+                  : Text(user != null && !_needsVerification ? 'Continue' : 'Send Verification Code'),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _RequirementItem(String text, bool isMet) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(
+            isMet ? Icons.check_circle_rounded : Icons.cancel_rounded,
+            color: isMet ? Colors.green : Colors.red,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              color: isMet ? Colors.green : Colors.red,
+            ),
+          ),
+        ],
       ),
     );
   }

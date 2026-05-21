@@ -25,12 +25,14 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _secondaryPhoneController = TextEditingController();
   final _cityController = TextEditingController();
   final _areaController = TextEditingController();
   final _addressController = TextEditingController();
   final _gstController = TextEditingController();
-  final _logoUrlController = TextEditingController();
-
+  final _fssaiController = TextEditingController();
+  
+  String? _logoUrl;
   String? _selectedType;
   bool _isLoading = false;
   Business? _existingBusiness;
@@ -78,11 +80,13 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           _existingBusiness = business;
           _nameController.text = business.businessName;
           _phoneController.text = business.phoneNumber;
+          _secondaryPhoneController.text = business.secondaryPhoneNumber ?? '';
           _cityController.text = business.city ?? '';
           _areaController.text = business.area ?? '';
           _addressController.text = business.address ?? '';
           _gstController.text = business.gstNumber ?? '';
-          _logoUrlController.text = business.logoUrl ?? '';
+          _fssaiController.text = business.fssaiNumber ?? '';
+          _logoUrl = business.logoUrl;
           _selectedType = business.businessType;
 
           if (kDebugMode) {
@@ -109,12 +113,20 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _secondaryPhoneController.dispose();
     _cityController.dispose();
     _areaController.dispose();
     _addressController.dispose();
     _gstController.dispose();
-    _logoUrlController.dispose();
+    _fssaiController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickLogo() async {
+    // Placeholder for actual image picking logic (e.g. image_picker package)
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Image picker coming soon. Logo URL preservation kept.')),
+    );
   }
 
   Future<void> _submit() async {
@@ -123,7 +135,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final user = ref.read(authStateChangesProvider).value;
+      final user = ref.read(firebaseAuthProvider).currentUser;
       if (user == null) return;
 
       final repo = ref.read(businessRepositoryProvider);
@@ -170,12 +182,14 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
         final updatedBusiness = _existingBusiness!.copyWith(
           businessName: _nameController.text.trim(),
           phoneNumber: _phoneController.text.trim(),
+          secondaryPhoneNumber: _secondaryPhoneController.text.trim().isEmpty ? null : _secondaryPhoneController.text.trim(),
           businessType: _selectedType ?? 'Other',
           city: _cityController.text.trim(),
           area: _areaController.text.trim(),
           address: _addressController.text.trim(),
           gstNumber: _gstController.text.trim(),
-          logoUrl: _logoUrlController.text.trim(),
+          fssaiNumber: _fssaiController.text.trim().isEmpty ? null : _fssaiController.text.trim(),
+          logoUrl: _logoUrl,
         );
         await repo.updateBusiness(updatedBusiness);
 
@@ -202,12 +216,14 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           ownerName: profile?.displayName ?? 'Owner',
           officialEmail: profile?.email ?? '',
           phoneNumber: _phoneController.text.trim(),
+          secondaryPhoneNumber: _secondaryPhoneController.text.trim().isEmpty ? null : _secondaryPhoneController.text.trim(),
           businessType: _selectedType ?? 'Other',
           city: _cityController.text.trim(),
           area: _areaController.text.trim(),
           address: _addressController.text.trim(),
           gstNumber: _gstController.text.trim(),
-          logoUrl: _logoUrlController.text.trim(),
+          fssaiNumber: _fssaiController.text.trim().isEmpty ? null : _fssaiController.text.trim(),
+          logoUrl: _logoUrl,
           createdAt: DateTime.now(),
         );
 
@@ -258,8 +274,23 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: Icon(_isEditMode ? Icons.arrow_back : Icons.arrow_back_rounded),
+          onPressed: () {
+            if (_isEditMode && Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else if (!_isEditMode) {
+              // Onboarding: Go back to Step 1 (SignUpScreen)
+              context.push('/auth/signup');
+            } else {
+              ref.read(firebaseAuthProvider).signOut();
+            }
+          },
+        ),
         title: Text(_isEditMode ? 'Edit Business' : 'Business Setup'),
       ),
       body: SingleChildScrollView(
@@ -272,7 +303,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
               Text(
                 _isEditMode
                     ? 'Update Business Details'
-                    : 'Step 2: Business Profile',
+                    : 'Step 3: Business Profile',
                 style:
                     const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
@@ -280,10 +311,40 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
               Text(
                 _isEditMode
                     ? 'Keep your business information up to date.'
-                    : 'Tell us about your business to complete your registration.',
+                    : 'Final Step: Tell us about your business to complete your registration.',
                 style: const TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 32),
+              
+              // Logo Selection UI
+              Center(
+                child: Column(
+                  children: [
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: cs.outlineVariant, width: 2),
+                        image: _logoUrl != null ? DecorationImage(
+                          image: NetworkImage(_logoUrl!),
+                          fit: BoxFit.cover,
+                        ) : null,
+                      ),
+                      child: _logoUrl == null ? Icon(Icons.business_rounded, size: 40, color: cs.onSurfaceVariant) : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: _pickLogo,
+                      icon: const Icon(Icons.add_a_photo_outlined, size: 20),
+                      label: const Text('Select Business Logo'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(
@@ -319,6 +380,22 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
                 keyboardType: TextInputType.phone,
                 validator: (v) =>
                     v == null || v.length < 10 ? 'Enter valid phone' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _secondaryPhoneController,
+                decoration: const InputDecoration(
+                  labelText: 'Secondary Number (Optional)',
+                  hintText: '10-digit number',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.phone,
+                validator: (v) {
+                  if (v != null && v.isNotEmpty && v.length < 10) {
+                    return 'Enter valid phone';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -359,12 +436,13 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
               ),
               const SizedBox(height: 16),
               TextFormField(
-                controller: _logoUrlController,
+                controller: _fssaiController,
                 decoration: const InputDecoration(
-                  labelText: 'Logo URL (Optional)',
+                  labelText: 'FSSAI Number (Optional)',
+                  hintText: '14-digit FSSAI number',
                   border: OutlineInputBorder(),
                 ),
-                keyboardType: TextInputType.url,
+                keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 40),
               FilledButton(

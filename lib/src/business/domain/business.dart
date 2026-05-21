@@ -7,6 +7,7 @@ class Business {
   final String ownerName;
   final String officialEmail;
   final String phoneNumber;
+  final String? secondaryPhoneNumber;
   final String businessType;
   final String? city;
   final String? area;
@@ -25,6 +26,7 @@ class Business {
     required this.ownerName,
     required this.officialEmail,
     required this.phoneNumber,
+    this.secondaryPhoneNumber,
     required this.businessType,
     this.city,
     this.area,
@@ -47,6 +49,7 @@ class Business {
       ownerName: map['ownerName'] ?? '',
       officialEmail: map['officialEmail'] ?? '',
       phoneNumber: map['phoneNumber'] ?? '',
+      secondaryPhoneNumber: map['secondaryPhoneNumber'],
       businessType: map['businessType'] ?? '',
       city: map['city'],
       area: map['area'],
@@ -68,6 +71,7 @@ class Business {
       'ownerName': ownerName,
       'officialEmail': officialEmail,
       'phoneNumber': phoneNumber,
+      'secondaryPhoneNumber': secondaryPhoneNumber,
       'businessType': businessType,
       'city': city,
       'area': area,
@@ -94,6 +98,7 @@ class Business {
     String? ownerName,
     String? officialEmail,
     String? phoneNumber,
+    String? secondaryPhoneNumber,
     String? businessType,
     String? city,
     String? area,
@@ -112,6 +117,7 @@ class Business {
       ownerName: ownerName ?? this.ownerName,
       officialEmail: officialEmail ?? this.officialEmail,
       phoneNumber: phoneNumber ?? this.phoneNumber,
+      secondaryPhoneNumber: secondaryPhoneNumber ?? this.secondaryPhoneNumber,
       businessType: businessType ?? this.businessType,
       city: city ?? this.city,
       area: area ?? this.area,

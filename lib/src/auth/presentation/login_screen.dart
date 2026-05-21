@@ -74,10 +74,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
+      appBar: AppBar(
+        leading: _showLoginForm 
+          ? IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () => setState(() => _showLoginForm = false),
+            )
+          : (Navigator.canPop(context) ? const BackButton() : null),
+        backgroundColor: Colors.transparent,
+      ),
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

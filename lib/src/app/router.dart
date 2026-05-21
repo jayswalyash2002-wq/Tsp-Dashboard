@@ -6,7 +6,6 @@ import 'package:tsp_dashboard/src/auth/presentation/auth_gate.dart';
 import 'package:tsp_dashboard/src/auth/presentation/login_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/otp_verification_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/sign_up_screen.dart';
-import 'package:tsp_dashboard/src/auth/presentation/register_details_screen.dart';
 import 'package:tsp_dashboard/src/dashboard/presentation/dashboard_screen.dart';
 import 'package:tsp_dashboard/src/dashboard/presentation/edit_menu_screen.dart';
 import 'package:tsp_dashboard/src/dashboard/presentation/history_screen.dart';
@@ -74,18 +73,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                 name: params['name'] ?? '',
                 password: params['password'] ?? '',
                 verificationId: params['verificationId'] ?? '',
-              );
-            },
-          ),
-          GoRoute(
-            path: 'register-details',
-            builder: (context, state) {
-              final params = state.uri.queryParameters;
-              return RegisterDetailsScreen(
-                email: params['email'] ?? '',
-                phoneNumber: params['phone'] ?? '',
-                initialName: params['name'],
-                initialPassword: params['password'],
               );
             },
           ),
