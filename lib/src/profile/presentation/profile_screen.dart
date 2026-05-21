@@ -14,6 +14,7 @@ import '../../core/rbac/permission.dart';
 import '../../core/rbac/permission_gate.dart';
 import '../../activity_log/presentation/providers/activity_log_providers.dart';
 import '../../activity_log/domain/entities/activity_log_enums.dart';
+import '../../activity_log/presentation/utils/activity_log_export_service.dart';
 import '../../expenses/data/expense_providers.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -132,30 +133,19 @@ class ProfileScreen extends ConsumerWidget {
                     onTap: () => context.push('/activity-log'),
                   ),
                   const SizedBox(height: 10),
+                  _Tile(
+                    title: 'Export Activity Log',
+                    subtitle: 'Generate PDF of recent activities',
+                    onTap: () => _exportActivityLog(context, ref),
+                  ),
+                  const SizedBox(height: 10),
                 ],
               ),
             ),
-            Consumer(
-              builder: (context, ref, child) {
-                final businessId = ref.watch(userBusinessIdProvider);
-                if (businessId == null) return const SizedBox.shrink();
-                return Column(
-                  children: [
-                    _Tile(
-                      title: 'Data Migration',
-                      subtitle:
-                          'Fix missing business data from old app version',
-                      onTap: () => _runMigration(context, ref, businessId),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                );
-              },
-            ),
             _Tile(
-              title: 'Device settings',
+              title: 'Settings',
               subtitle: 'Device: ${deviceName ?? "Not set"}',
-              onTap: () {},
+              onTap: () => context.push('/settings'),
             ),
             const SizedBox(height: 10),
             Consumer(
@@ -199,6 +189,59 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _exportActivityLog(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    // Show loading
+    if (!context.mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final business = ref.read(currentBusinessProvider).value;
+      final businessId = ref.read(userBusinessIdProvider);
+
+      if (businessId == null) throw 'No business selected';
+
+      final useCase = ref.read(getActivityLogUseCaseProvider);
+      final result = await useCase(businessId: businessId);
+
+      if (context.mounted) Navigator.pop(context); // hide loading
+
+      if (result.entries.isEmpty) {
+        messenger.showSnackBar(const SnackBar(content: Text('No logs found to export')));
+        return;
+      }
+
+      final exportResult = await ActivityLogExportService.exportToPdf(
+        entries: result.entries,
+        business: business,
+      );
+
+      if (exportResult.success) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(exportResult.message),
+            action: exportResult.path != null
+                ? SnackBarAction(
+                    label: 'Open',
+                    onPressed: () => ActivityLogExportService.openFile(exportResult.path!),
+                  )
+                : null,
+          ),
+        );
+      } else if (exportResult.message != 'Export cancelled') {
+        messenger.showSnackBar(SnackBar(content: Text(exportResult.message)));
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context); // hide loading
+      messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
+    }
+  }
+
   String _getAvatarLetter(String? displayName, String? email) {
     if (displayName != null && displayName.trim().isNotEmpty) {
       return displayName.trim()[0].toUpperCase();
@@ -209,43 +252,6 @@ class ProfileScreen extends ConsumerWidget {
     return '?';
   }
 
-  Future<void> _runMigration(
-      BuildContext context, WidgetRef ref, String businessId) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Run Data Migration?'),
-        content: const Text(
-          'This will scan your records and link them to this business. '
-          'Only run this if you are missing orders or menu items from the previous version.',
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Run Migration')),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    try {
-      final repo = ref.read(dataMigrationRepositoryProvider);
-      final count = await repo.migrateLegacyData(businessId);
-
-      messenger.showSnackBar(
-        SnackBar(content: Text('Migration complete! Fixed $count records.')),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Migration failed: $e')),
-      );
-    }
-  }
 }
 
 class _BusinessIdentityCard extends ConsumerWidget {
@@ -310,21 +316,6 @@ class _BusinessIdentityCard extends ConsumerWidget {
                 if (business.isGstRegistered)
                   _InfoRow(
                       label: 'GSTIN', value: business.gstNumber!, isVertical: true),
-                const SizedBox(height: 16),
-                PermissionGate(
-                  permission: Permission.accessSettings,
-                  child: OutlinedButton.icon(
-                    onPressed: () =>
-                        context.push('/business-setup?id=${business.id}'),
-                    icon: const Icon(Icons.edit, size: 16),
-                    label: const Text('Edit Business Details'),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(40),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),

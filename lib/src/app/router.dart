@@ -11,6 +11,7 @@ import 'package:tsp_dashboard/src/dashboard/presentation/edit_menu_screen.dart';
 import 'package:tsp_dashboard/src/dashboard/presentation/history_screen.dart';
 import 'package:tsp_dashboard/src/expenses/presentation/expenses_screen.dart';
 import 'package:tsp_dashboard/src/profile/presentation/profile_screen.dart';
+import 'package:tsp_dashboard/src/profile/presentation/settings_screen.dart';
 import 'package:tsp_dashboard/src/reports/presentation/expense_reports_screen.dart';
 import 'package:tsp_dashboard/src/reports/presentation/sales_reports_screen.dart';
 import 'package:tsp_dashboard/src/business/presentation/business_setup_screen.dart';
@@ -107,6 +108,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/activity-log',
             builder: (context, state) => const ActivityLogScreen(),
+          ),
+          GoRoute(
+            path: '/settings',
+            builder: (context, state) => const SettingsScreen(),
           ),
           StatefulShellRoute.indexedStack(
             builder: (context, state, navigationShell) {

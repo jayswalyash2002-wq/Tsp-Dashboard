@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 
-ThemeData appThemeDark() {
-  const surface = Color(0xFF0B0C0F);
-  const surface2 = Color(0xFF11131A);
-  const card = Color(0xFF141826);
-  const accent = Color(0xFFB9F6CA); // mint
-  const text = Color(0xFFEDEFF6);
-  const textMuted = Color(0xFFB6BBD0);
+ThemeData createAppTheme(Brightness brightness, Color accentColor) {
+  final isDark = brightness == Brightness.dark;
+  
+  final surface = isDark ? const Color(0xFF0B0C0F) : const Color(0xFFF8F9FA);
+  final surface2 = isDark ? const Color(0xFF11131A) : const Color(0xFFF1F3F5);
+  final card = isDark ? const Color(0xFF141826) : Colors.white;
+  final text = isDark ? const Color(0xFFEDEFF6) : const Color(0xFF1A1C1E);
+  final textMuted = isDark ? const Color(0xFFB6BBD0) : const Color(0xFF6C757D);
   const danger = Color(0xFFFF6B6B);
 
   final colorScheme = ColorScheme.fromSeed(
-    seedColor: accent,
-    brightness: Brightness.dark,
+    seedColor: accentColor,
+    brightness: brightness,
     surface: surface,
     onSurface: text,
-    primary: accent,
-    onPrimary: Colors.black,
-    secondary: Color(0xFF7AA2FF),
-    onSecondary: Colors.black,
+    primary: accentColor,
+    onPrimary: isDark ? Colors.black : Colors.white,
+    secondary: const Color(0xFF7AA2FF),
+    onSecondary: isDark ? Colors.black : Colors.white,
     error: danger,
     onError: Colors.black,
   ).copyWith(
@@ -32,7 +33,7 @@ ThemeData appThemeDark() {
   );
 
   return base.copyWith(
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       centerTitle: false,
       elevation: 0,
       backgroundColor: surface,
@@ -58,7 +59,7 @@ ThemeData appThemeDark() {
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide.none,
       ),
-      hintStyle: const TextStyle(color: textMuted),
+      hintStyle: TextStyle(color: textMuted),
     ),
     textTheme: base.textTheme.copyWith(
       titleLarge: base.textTheme.titleLarge?.copyWith(
@@ -74,10 +75,13 @@ ThemeData appThemeDark() {
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: surface2,
-      contentTextStyle: const TextStyle(color: text),
+      contentTextStyle: TextStyle(color: text),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       behavior: SnackBarBehavior.floating,
     ),
   );
 }
 
+// Keep the old name for backward compatibility if needed, 
+// but it's better to use the new one.
+ThemeData appThemeDark() => createAppTheme(Brightness.dark, const Color(0xFFB9F6CA));

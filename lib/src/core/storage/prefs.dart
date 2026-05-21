@@ -7,5 +7,7 @@ final sharedPreferencesProvider = FutureProvider<SharedPreferences>((ref) async 
 
 class PrefKeys {
   static const deviceName = 'device_name';
+  static const themeMode = 'theme_mode';
+  static const accentColor = 'accent_color';
 }
 

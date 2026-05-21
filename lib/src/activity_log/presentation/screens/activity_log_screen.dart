@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/activity_log_enums.dart';
 import '../providers/activity_log_providers.dart';
 import '../widgets/activity_log_entry_tile.dart';
+import '../utils/activity_log_export_service.dart';
+import '../../../business/data/business_providers.dart';
 
 class ActivityLogScreen extends ConsumerStatefulWidget {
   const ActivityLogScreen({super.key});
@@ -13,6 +15,7 @@ class ActivityLogScreen extends ConsumerStatefulWidget {
 
 class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
   final ScrollController _scrollController = ScrollController();
+  bool _isExporting = false;
 
   @override
   void initState() {
@@ -33,6 +36,47 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
     }
   }
 
+  Future<void> _exportPdf() async {
+    final state = ref.read(activityLogNotifierProvider).value;
+    if (state == null || state.entries.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No logs available to export')),
+      );
+      return;
+    }
+
+    setState(() => _isExporting = true);
+    try {
+      final business = ref.read(currentBusinessProvider).value;
+      final result = await ActivityLogExportService.exportToPdf(
+        entries: state.entries,
+        business: business,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.message),
+            action: result.path != null
+                ? SnackBarAction(
+                    label: 'Open',
+                    onPressed: () => ActivityLogExportService.openFile(result.path!),
+                  )
+                : null,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final stateAsync = ref.watch(activityLogNotifierProvider);
@@ -40,6 +84,23 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Activity Log'),
+        actions: [
+          if (_isExporting)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: 'Export as PDF',
+              onPressed: _exportPdf,
+            ),
+        ],
       ),
       body: Column(
         children: [
