@@ -1,117 +1,24 @@
 import 'dart:io';
+import 'package:csv/csv.dart';
+import 'package:excel/excel.dart';
 import 'package:flutter/foundation.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../domain/entities/activity_log_entry.dart';
 import '../widgets/activity_log_helper.dart';
 import '../../../business/domain/business.dart';
 
-class ExportResult {
-  final bool success;
-  final String? path;
-  final String message;
-
-  ExportResult({
-    required this.success,
-    this.path,
-    required this.message,
-  });
-}
-
 class ActivityLogExportService {
   static final _fmt = DateFormat('d MMM yyyy, hh:mm a');
-  static const _prefKey = 'last_export_directory';
 
-  static Future<String?> _getSavedDirectory() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_prefKey);
-  }
-
-  static Future<void> _saveDirectory(String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefKey, path);
-  }
-
-  static Future<ExportResult> _saveFile({
-    required String fileName,
-    required Uint8List bytes,
-  }) async {
-    try {
-      final savedDirPath = await _getSavedDirectory();
-      if (savedDirPath != null) {
-        final dir = Directory(savedDirPath);
-        if (await dir.exists()) {
-          try {
-            final file = File('${dir.path}/$fileName');
-            await file.writeAsBytes(bytes);
-            return ExportResult(
-              success: true,
-              path: file.path,
-              message: 'Activity log exported successfully',
-            );
-          } catch (e) {
-            debugPrint('Failed to write to saved directory: $e');
-          }
-        }
-      }
-
-      final String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: 'Select export location',
-        fileName: fileName,
-        bytes: bytes,
-      );
-
-      if (outputFile != null) {
-        final lastSeparator = outputFile.lastIndexOf(Platform.pathSeparator);
-        if (lastSeparator != -1) {
-          final dirPath = outputFile.substring(0, lastSeparator);
-          await _saveDirectory(dirPath);
-        }
-
-        return ExportResult(
-          success: true,
-          path: outputFile,
-          message: 'Activity log exported successfully',
-        );
-      }
-
-      return ExportResult(
-        success: false,
-        message: 'Export cancelled',
-      );
-    } catch (e) {
-      try {
-        final baseDir = await getApplicationDocumentsDirectory();
-        final file = File('${baseDir.path}/$fileName');
-        await file.writeAsBytes(bytes);
-
-        return ExportResult(
-          success: true,
-          path: file.path,
-          message: 'Saved to App Documents directory.',
-        );
-      } catch (fallbackError) {
-        return ExportResult(
-          success: false,
-          message: 'Failed to save: $e',
-        );
-      }
-    }
-  }
-
-  static Future<ExportResult> exportToPdf({
+  static Future<void> exportToPdf({
     required List<ActivityLogEntry> entries,
     Business? business,
   }) async {
-    if (entries.isEmpty) {
-      return ExportResult(success: false, message: 'No logs to export');
-    }
-
     final pdf = pw.Document();
 
     pdf.addPage(
@@ -189,16 +96,76 @@ class ActivityLogExportService {
     );
 
     final bytes = await pdf.save();
-    final fileName = 'TSP_ActivityLog_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: 'activity_log_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf',
+    );
+  }
 
-    return await _saveFile(fileName: fileName, bytes: bytes);
+  static Future<void> exportToCsv({
+    required List<ActivityLogEntry> entries,
+  }) async {
+    final List<List<dynamic>> rows = [
+      ['Timestamp', 'Action', 'User Name', 'User Role', 'Details'],
+      ...entries.map((e) => [
+            e.timestamp != null ? _fmt.format(e.timestamp!) : 'N/A',
+            e.humanReadableAction,
+            e.performedByName,
+            e.performedByRole,
+            _formatMetadata(e).replaceAll('\n', '; '),
+          ]),
+    ];
+
+    final String csvData = const ListToCsvConverter().convert(rows);
+    final directory = await getTemporaryDirectory();
+    final path = '${directory.path}/activity_log_${DateTime.now().millisecondsSinceEpoch}.csv';
+    final file = File(path);
+    await file.writeAsString(csvData);
+
+    await Share.shareXFiles([XFile(path)], subject: 'Activity Log CSV');
+  }
+
+  static Future<void> exportToXlsx({
+    required List<ActivityLogEntry> entries,
+  }) async {
+    final excel = Excel.createExcel();
+    final Sheet sheet = excel[excel.getDefaultSheet()!];
+
+    // Header
+    sheet.appendRow([
+      TextCellValue('Timestamp'),
+      TextCellValue('Action'),
+      TextCellValue('User Name'),
+      TextCellValue('User Role'),
+      TextCellValue('Details'),
+    ]);
+
+    // Data
+    for (final e in entries) {
+      sheet.appendRow([
+        TextCellValue(e.timestamp != null ? _fmt.format(e.timestamp!) : 'N/A'),
+        TextCellValue(e.humanReadableAction),
+        TextCellValue(e.performedByName),
+        TextCellValue(e.performedByRole),
+        TextCellValue(_formatMetadata(e).replaceAll('\n', '; ')),
+      ]);
+    }
+
+    final bytes = excel.encode();
+    if (bytes == null) return;
+
+    final directory = await getTemporaryDirectory();
+    final path = '${directory.path}/activity_log_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+    final file = File(path);
+    await file.writeAsBytes(bytes);
+
+    await Share.shareXFiles([XFile(path)], subject: 'Activity Log XLSX');
   }
 
   static pw.Widget _headerCell(String text) {
     return pw.Padding(
       padding: const pw.EdgeInsets.all(6),
-      child: pw.Text(text,
-          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
+      child: pw.Text(text, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
     );
   }
 
@@ -207,8 +174,7 @@ class ActivityLogExportService {
       padding: const pw.EdgeInsets.all(6),
       child: pw.Text(text,
           style: pw.TextStyle(
-              fontSize: 8,
-              fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal)),
+              fontSize: 8, fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal)),
     );
   }
 
@@ -224,9 +190,5 @@ class ActivityLogExportService {
       });
     }
     return buffer.toString().trim();
-  }
-
-  static Future<void> openFile(String path) async {
-    await OpenFilex.open(path);
   }
 }

@@ -6,6 +6,7 @@ import '../domain/menu_item.dart';
 import '../domain/order_models.dart';
 import '../../activity_log/presentation/providers/activity_log_providers.dart';
 import '../../activity_log/domain/entities/activity_log_enums.dart';
+import '../../inventory/application/inventory_service.dart';
 
 class OrderControllerState {
   OrderControllerState({
@@ -145,6 +146,11 @@ class OrderController extends Notifier<OrderControllerState> {
       );
       await repo.updateOrder(state.originalOrder!, updated);
 
+      if (state.originalOrder!.paymentStatus != PaymentStatus.paid &&
+          updated.paymentStatus == PaymentStatus.paid) {
+        unawaited(ref.read(inventoryServiceProvider).deductForOrder(updated.lines, updated.id));
+      }
+
       unawaited(
         ref.read(logActivityUseCaseProvider).execute(
           action: ActivityAction.orderModified,
@@ -157,6 +163,10 @@ class OrderController extends Notifier<OrderControllerState> {
       );
     } else {
       final orderId = await repo.saveOrder(state.draft);
+
+      if (state.draft.paymentStatus == PaymentStatus.paid) {
+        unawaited(ref.read(inventoryServiceProvider).deductForOrder(state.draft.lines, orderId));
+      }
 
       unawaited(
         ref.read(logActivityUseCaseProvider).execute(
@@ -173,7 +183,7 @@ class OrderController extends Notifier<OrderControllerState> {
   }
 
   Future<void> cancelOrder({
-    required String orderId,
+    required SavedOrder order,
     CancellationReason? reason,
   }) async {
     final repo = await ref.read(orderRepositoryProvider.future);
@@ -182,7 +192,7 @@ class OrderController extends Notifier<OrderControllerState> {
     final logUseCase = ref.read(logActivityUseCaseProvider);
 
     await repo.cancelOrder(
-      orderId: orderId,
+      orderId: order.id,
       cancelledBy: logUseCase.performedBy,
       cancelledByName: logUseCase.performedByName,
       cancelledByRole: logUseCase.performedByRole,
@@ -190,6 +200,11 @@ class OrderController extends Notifier<OrderControllerState> {
       platform: logUseCase.platform,
       reason: reason,
     );
+
+    // Restore inventory if it was deducted
+    if (order.inventoryDeducted) {
+      await ref.read(inventoryServiceProvider).restoreForOrder(order);
+    }
   }
 
   void clear() {

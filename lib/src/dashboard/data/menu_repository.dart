@@ -47,6 +47,7 @@ class MenuRepository {
       'sortOrder': item.sortOrder,
       'categorySortOrder': item.categorySortOrder,
       'isDeleted': false,
+      'consumableMappings': item.consumableMappings,
       'createdBy': uid,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -89,6 +90,7 @@ class MenuRepository {
         'sortOrder': item.sortOrder,
         'categorySortOrder': item.categorySortOrder,
         'isDeleted': item.isDeleted,
+        'consumableMappings': item.consumableMappings,
         'updatedBy': uid,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));

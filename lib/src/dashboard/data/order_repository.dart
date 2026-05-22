@@ -107,6 +107,7 @@ class OrderRepository {
               'pricePaise': l.item.pricePaise,
               'qty': l.qty,
               'lineTotalPaise': l.lineTotalPaise,
+              'consumableMappings': l.item.consumableMappings,
             }
         ],
         'subtotalPaise': draft.subtotalPaise,
@@ -122,6 +123,7 @@ class OrderRepository {
           'status': draft.paymentStatus.name,
           'splitLines': [for (final s in draft.splitLines) s.toMap()],
         },
+        'inventoryDeducted': false,
       });
     });
 
@@ -197,6 +199,7 @@ class OrderRepository {
               'pricePaise': l.item.pricePaise,
               'qty': l.qty,
               'lineTotalPaise': l.lineTotalPaise,
+              'consumableMappings': l.item.consumableMappings,
             }
         ],
         'subtotalPaise': newOrder.subtotalPaise,
@@ -212,6 +215,7 @@ class OrderRepository {
           'status': newOrder.paymentStatus.name,
           'splitLines': [for (final s in newOrder.splitLines) s.toMap()],
         },
+        'inventoryDeducted': newOrder.inventoryDeducted,
         'updatedAt': FieldValue.serverTimestamp(),
         'updatedBy': _auth.currentUser?.uid,
       });

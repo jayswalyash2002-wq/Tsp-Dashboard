@@ -32,6 +32,7 @@ enum MembershipRole {
           Permission.manageBusiness,
           Permission.accessSettings,
           Permission.manageStaff,
+          Permission.manageInventory,
         };
       case MembershipRole.cashier:
         return {

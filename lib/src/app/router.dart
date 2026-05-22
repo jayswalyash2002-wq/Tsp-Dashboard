@@ -16,6 +16,7 @@ import 'package:tsp_dashboard/src/reports/presentation/expense_reports_screen.da
 import 'package:tsp_dashboard/src/reports/presentation/sales_reports_screen.dart';
 import 'package:tsp_dashboard/src/business/presentation/business_setup_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/staff_management_screen.dart';
+import 'package:tsp_dashboard/src/inventory/presentation/inventory_screen.dart';
 import 'package:tsp_dashboard/src/features/staff/presentation/add_staff_screen.dart';
 import 'package:tsp_dashboard/src/features/staff/presentation/invite_code_screen.dart';
 import 'package:tsp_dashboard/src/features/staff/presentation/pending_invites_screen.dart';
@@ -43,6 +44,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         '/expenses': Permission.manageExpenses,
         '/staff': Permission.manageStaff,
         '/activity-log': Permission.viewActivityLog,
+        '/inventory': Permission.manageInventory,
       };
 
       for (final entry in routePermissions.entries) {
@@ -133,6 +135,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/activity-log',
             builder: (context, state) => const ActivityLogScreen(),
+          ),
+          GoRoute(
+            path: '/inventory',
+            builder: (context, state) => const InventoryScreen(),
           ),
           GoRoute(
             path: '/settings',

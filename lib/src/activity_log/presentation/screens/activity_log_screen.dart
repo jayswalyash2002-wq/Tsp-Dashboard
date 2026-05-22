@@ -36,7 +36,7 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
     }
   }
 
-  Future<void> _exportPdf() async {
+  Future<void> _handleExport(Future<void> Function() exportFn) async {
     final state = ref.read(activityLogNotifierProvider).value;
     if (state == null || state.entries.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -47,25 +47,7 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
 
     setState(() => _isExporting = true);
     try {
-      final business = ref.read(currentBusinessProvider).value;
-      final result = await ActivityLogExportService.exportToPdf(
-        entries: state.entries,
-        business: business,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.message),
-            action: result.path != null
-                ? SnackBarAction(
-                    label: 'Open',
-                    onPressed: () => ActivityLogExportService.openFile(result.path!),
-                  )
-                : null,
-          ),
-        );
-      }
+      await exportFn();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -75,6 +57,31 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
     } finally {
       if (mounted) setState(() => _isExporting = false);
     }
+  }
+
+  Future<void> _exportPdf() async {
+    await _handleExport(() async {
+      final entries = ref.read(activityLogNotifierProvider).value?.entries ?? [];
+      final business = ref.read(currentBusinessProvider).value;
+      await ActivityLogExportService.exportToPdf(
+        entries: entries,
+        business: business,
+      );
+    });
+  }
+
+  Future<void> _exportCsv() async {
+    await _handleExport(() async {
+      final entries = ref.read(activityLogNotifierProvider).value?.entries ?? [];
+      await ActivityLogExportService.exportToCsv(entries: entries);
+    });
+  }
+
+  Future<void> _exportXlsx() async {
+    await _handleExport(() async {
+      final entries = ref.read(activityLogNotifierProvider).value?.entries ?? [];
+      await ActivityLogExportService.exportToXlsx(entries: entries);
+    });
   }
 
   @override
@@ -95,10 +102,54 @@ class _ActivityLogScreenState extends ConsumerState<ActivityLogScreen> {
               ),
             )
           else
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              tooltip: 'Export as PDF',
-              onPressed: _exportPdf,
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.download),
+              tooltip: 'Export Logs',
+              onSelected: (value) {
+                switch (value) {
+                  case 'pdf':
+                    _exportPdf();
+                    break;
+                  case 'csv':
+                    _exportCsv();
+                    break;
+                  case 'xlsx':
+                    _exportXlsx();
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'pdf',
+                  child: Row(
+                    children: [
+                      Icon(Icons.picture_as_pdf, size: 20),
+                      SizedBox(width: 12),
+                      Text('Export as PDF'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'csv',
+                  child: Row(
+                    children: [
+                      Icon(Icons.description, size: 20),
+                      SizedBox(width: 12),
+                      Text('Export as CSV'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'xlsx',
+                  child: Row(
+                    children: [
+                      Icon(Icons.table_chart, size: 20),
+                      SizedBox(width: 12),
+                      Text('Export as XLSX'),
+                    ],
+                  ),
+                ),
+              ],
             ),
         ],
       ),

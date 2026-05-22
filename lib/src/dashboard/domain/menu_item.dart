@@ -9,6 +9,7 @@ class MenuItem {
     this.categorySortOrder = 0,
     this.businessId,
     this.isDeleted = false,
+    this.consumableMappings = const {},
   });
 
   final String id;
@@ -20,6 +21,7 @@ class MenuItem {
   final int categorySortOrder;
   final String? businessId;
   final bool isDeleted;
+  final Map<String, int> consumableMappings;
 
   double get price => pricePaise / 100.0;
 
@@ -36,6 +38,7 @@ class MenuItem {
       categorySortOrder: data['categorySortOrder'] ?? 0,
       businessId: data['businessId']?.toString(),
       isDeleted: data['isDeleted'] == true,
+      consumableMappings: Map<String, int>.from(data['consumableMappings'] ?? {}),
     );
   }
 
@@ -47,6 +50,7 @@ class MenuItem {
     int? sortOrder,
     int? categorySortOrder,
     bool? isDeleted,
+    Map<String, int>? consumableMappings,
   }) {
     return MenuItem(
       id: id,
@@ -58,7 +62,22 @@ class MenuItem {
       categorySortOrder: categorySortOrder ?? this.categorySortOrder,
       businessId: businessId,
       isDeleted: isDeleted ?? this.isDeleted,
+      consumableMappings: consumableMappings ?? this.consumableMappings,
     );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'pricePaise': pricePaise,
+      'category': category,
+      'available': available,
+      'sortOrder': sortOrder,
+      'categorySortOrder': categorySortOrder,
+      'businessId': businessId,
+      'isDeleted': isDeleted,
+      'consumableMappings': consumableMappings,
+    };
   }
 }
 

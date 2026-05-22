@@ -8,5 +8,6 @@ enum Permission {
   manageExpenses,
   manageBusiness,
   accessSettings,
-  viewActivityLog;
+  viewActivityLog,
+  manageInventory;
 }

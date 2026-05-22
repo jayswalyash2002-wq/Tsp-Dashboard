@@ -1,10 +1,15 @@
 import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../data/dashboard_providers.dart';
 import '../domain/menu_item.dart';
 import '../../activity_log/presentation/providers/activity_log_providers.dart';
 import '../../activity_log/domain/entities/activity_log_enums.dart';
+import '../../core/rbac/permission.dart';
+import '../../core/rbac/permission_gate.dart';
+import '../../inventory/data/inventory_providers.dart';
+import '../../inventory/domain/inventory_item.dart';
 
 // Provider to track which categories are expanded in the menu editor
 final expandedCategoriesProvider = StateProvider<Set<String>>((ref) => <String>{});
@@ -235,104 +240,321 @@ class EditMenuScreen extends ConsumerWidget {
   }
 
   void _showEditDialog(BuildContext context, WidgetRef ref, {MenuItem? item, String? initialCategory}) {
-    final nameController = TextEditingController(text: item?.name);
-    final categoryController = TextEditingController(text: item?.category ?? initialCategory);
-    final priceController =
-        TextEditingController(text: item != null ? (item.pricePaise / 100).toStringAsFixed(0) : '');
-
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(item == null ? 'Add Item to ${initialCategory ?? "Menu"}' : 'Edit Item'),
-        content: Column(
+      builder: (context) => _EditMenuItemDialog(item: item, initialCategory: initialCategory),
+    );
+  }
+}
+
+class _EditMenuItemDialog extends ConsumerStatefulWidget {
+  const _EditMenuItemDialog({this.item, this.initialCategory});
+  final MenuItem? item;
+  final String? initialCategory;
+
+  @override
+  ConsumerState<_EditMenuItemDialog> createState() => _EditMenuItemDialogState();
+}
+
+class _EditMenuItemDialogState extends ConsumerState<_EditMenuItemDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _categoryController;
+  late final TextEditingController _priceController;
+  late Map<String, int> _consumableMappings;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.item?.name);
+    _categoryController = TextEditingController(text: widget.item?.category ?? widget.initialCategory);
+    _priceController =
+        TextEditingController(text: widget.item != null ? (widget.item!.pricePaise / 100).toStringAsFixed(0) : '');
+    _consumableMappings = Map.from(widget.item?.consumableMappings ?? {});
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _categoryController.dispose();
+    _priceController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final initialCategory = widget.initialCategory;
+    final cs = Theme.of(context).colorScheme;
+
+    return AlertDialog(
+      title: Text(item == null ? 'Add Item to ${initialCategory ?? "Menu"}' : 'Edit Item'),
+      content: SingleChildScrollView(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: nameController,
+              controller: _nameController,
               autofocus: item == null,
               decoration: const InputDecoration(labelText: 'Item Name'),
+              textCapitalization: TextCapitalization.words,
             ),
             if (initialCategory == null)
               TextField(
-                controller: categoryController,
+                controller: _categoryController,
                 decoration: const InputDecoration(labelText: 'Category'),
+                textCapitalization: TextCapitalization.words,
               ),
             TextField(
-              controller: priceController,
+              controller: _priceController,
               decoration: const InputDecoration(labelText: 'Price (Rs.)'),
               keyboardType: TextInputType.number,
             ),
+            _ConsumableMappingSection(
+              initialMappings: _consumableMappings,
+              onChanged: (mappings) => _consumableMappings = mappings,
+            ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              final cat = categoryController.text.trim();
-              final price = (double.tryParse(priceController.text) ?? 0) * 100;
-
-              if (name.isEmpty || cat.isEmpty) return;
-
-              try {
-                final repo = ref.read(menuRepositoryProvider);
-                if (repo == null) return;
-                if (item == null) {
-                  final newItem = MenuItem(
-                    id: '',
-                    name: name,
-                    category: cat,
-                    pricePaise: price.toInt(),
-                    available: true,
-                    sortOrder: 999,
-                  );
-                  await repo.addMenuItem(newItem);
-                  unawaited(
-                    ref.read(logActivityUseCaseProvider).execute(
-                          action: ActivityAction.menuItemAdded,
-                          category: ActivityCategory.operational,
-                          targetType: 'menuItem',
-                          targetName: name,
-                          metadata: {'price': price / 100, 'category': cat},
-                        ),
-                  );
-                } else {
-                  final updatedItem = MenuItem(
-                    id: item.id,
-                    name: name,
-                    category: cat,
-                    pricePaise: price.toInt(),
-                    available: item.available,
-                    sortOrder: item.sortOrder,
-                    categorySortOrder: item.categorySortOrder,
-                  );
-                  await repo.updateMenuItem(updatedItem);
-                  unawaited(
-                    ref.read(logActivityUseCaseProvider).execute(
-                          action: ActivityAction.menuItemModified,
-                          category: ActivityCategory.operational,
-                          targetType: 'menuItem',
-                          targetId: item.id,
-                          targetName: name,
-                        ),
-                  );
-                }
-                if (!context.mounted) return;
-                Navigator.pop(context);
-                // Expand category automatically when adding new item
-                final currentExpanded = ref.read(expandedCategoriesProvider);
-                ref.read(expandedCategoriesProvider.notifier).state = {...currentExpanded, cat};
-              } catch (e) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () async {
+            final name = _nameController.text.trim();
+            final cat = _categoryController.text.trim();
+            final price = (double.tryParse(_priceController.text) ?? 0) * 100;
+
+            if (name.isEmpty || cat.isEmpty) return;
+
+            try {
+              final repo = ref.read(menuRepositoryProvider);
+              if (repo == null) return;
+              if (item == null) {
+                final newItem = MenuItem(
+                  id: '',
+                  name: name,
+                  category: cat,
+                  pricePaise: price.toInt(),
+                  available: true,
+                  sortOrder: 999,
+                  consumableMappings: _consumableMappings,
+                );
+                await repo.addMenuItem(newItem);
+                unawaited(
+                  ref.read(logActivityUseCaseProvider).execute(
+                        action: ActivityAction.menuItemAdded,
+                        category: ActivityCategory.operational,
+                        targetType: 'menuItem',
+                        targetName: name,
+                        metadata: {
+                          'price': price / 100,
+                          'category': cat,
+                          'consumables': _consumableMappings,
+                        },
+                      ),
+                );
+              } else {
+                final updatedItem = MenuItem(
+                  id: item.id,
+                  name: name,
+                  category: cat,
+                  pricePaise: price.toInt(),
+                  available: item.available,
+                  sortOrder: item.sortOrder,
+                  categorySortOrder: item.categorySortOrder,
+                  consumableMappings: _consumableMappings,
+                );
+                await repo.updateMenuItem(updatedItem);
+                unawaited(
+                  ref.read(logActivityUseCaseProvider).execute(
+                        action: ActivityAction.menuItemModified,
+                        category: ActivityCategory.operational,
+                        targetType: 'menuItem',
+                        targetId: item.id,
+                        targetName: name,
+                        metadata: {'consumables': _consumableMappings},
+                      ),
+                );
+              }
+              if (!mounted) return;
+              Navigator.pop(context);
+              // Expand category automatically when adding new item
+              final currentExpanded = ref.read(expandedCategoriesProvider);
+              ref.read(expandedCategoriesProvider.notifier).state = {...currentExpanded, cat};
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+            }
+          },
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
+}
+
+class _ConsumableMappingSection extends ConsumerStatefulWidget {
+  const _ConsumableMappingSection({
+    required this.initialMappings,
+    required this.onChanged,
+  });
+
+  final Map<String, int> initialMappings;
+  final ValueChanged<Map<String, int>> onChanged;
+
+  @override
+  ConsumerState<_ConsumableMappingSection> createState() => _ConsumableMappingSectionState();
+}
+
+class _ConsumableMappingSectionState extends ConsumerState<_ConsumableMappingSection> {
+  late Map<String, int> _mappings;
+
+  @override
+  void initState() {
+    super.initState();
+    _mappings = Map.from(widget.initialMappings);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final inventoryAsync = ref.watch(inventoryStreamProvider);
+    final cs = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        const Divider(),
+        const SizedBox(height: 16),
+        Text(
+          'CONSUMABLE MAPPING',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: cs.primary,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.1,
+              ),
+        ),
+        const SizedBox(height: 12),
+        inventoryAsync.when(
+          data: (items) {
+            if (items.isEmpty) {
+              return Text(
+                'No inventory items found. Add items to inventory first to link them to this product.',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontStyle: FontStyle.italic),
+              );
+            }
+
+            return Column(
+              children: [
+                ..._mappings.entries.map((entry) {
+                  final item = items.firstWhere(
+                    (i) => i.id == entry.key,
+                    orElse: () => InventoryItem(
+                      id: entry.key,
+                      name: 'Unknown Item',
+                      stock: 0,
+                      unit: '',
+                      lowStockThreshold: 0,
+                    ),
+                  );
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.w500))),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 50,
+                          child: TextFormField(
+                            initialValue: entry.value.toString(),
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.center,
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(vertical: 8),
+                            ),
+                            onChanged: (val) {
+                              final qty = int.tryParse(val) ?? 0;
+                              if (qty > 0) {
+                                _mappings[entry.key] = qty;
+                                widget.onChanged(_mappings);
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(item.unit, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+                        IconButton(
+                          icon: Icon(Icons.remove_circle_outline, size: 20, color: cs.error),
+                          onPressed: () {
+                            setState(() {
+                              _mappings.remove(entry.key);
+                              widget.onChanged(_mappings);
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                if (_mappings.length < items.length)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => _showAddItemDialog(context, items),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Add Consumable Mapping'),
+                      style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                    ),
+                  ),
+              ],
+            );
+          },
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator())),
+          error: (e, _) => Text('Error loading inventory: $e'),
+        ),
+      ],
+    );
+  }
+
+  void _showAddItemDialog(BuildContext context, List<InventoryItem> items) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final available = items.where((i) => !_mappings.containsKey(i.id)).toList();
+        return AlertDialog(
+          title: const Text('Select Consumable'),
+          content: available.isEmpty
+              ? const Text('All items already mapped.')
+              : SizedBox(
+                  width: double.maxFinite,
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: available.length,
+                    itemBuilder: (context, index) {
+                      final item = available[index];
+                      return ListTile(
+                        title: Text(item.name),
+                        trailing: Text(item.unit, style: const TextStyle(fontSize: 12)),
+                        onTap: () {
+                          setState(() {
+                            _mappings[item.id] = 1;
+                            widget.onChanged(_mappings);
+                          });
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  ),
+                ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ],
+        );
+      },
+    );
+  }
+}
 
   void _showDeleteCategoryConfirm(BuildContext context, WidgetRef ref, String category, List<MenuItem> items) {
     showDialog(
@@ -395,7 +617,7 @@ class EditMenuScreen extends ConsumerWidget {
       ),
     );
   }
-}
+
 
 class _CategoryHeader extends StatelessWidget {
   const _CategoryHeader({

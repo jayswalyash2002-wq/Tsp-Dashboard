@@ -87,7 +87,7 @@ class _CancellationDialogState extends State<CancellationDialog> {
                       setState(() => _isProcessing = true);
                       try {
                         await ref.read(orderControllerProvider.notifier).cancelOrder(
-                              orderId: widget.order.id,
+                              order: widget.order,
                               reason: _selectedReason,
                             );
                         if (context.mounted) {

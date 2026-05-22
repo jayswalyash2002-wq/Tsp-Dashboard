@@ -83,7 +83,7 @@ class _NormalCartBar extends ConsumerWidget {
                 duration: const Duration(milliseconds: 200),
                 child: Text(
                   '$count ${count == 1 ? 'item' : 'items'}  ·  Rs. $total',
-                  key: ValueKey('cart_text_$count\_$total'),
+                  key: ValueKey('cart_text_${count}_$total'),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),

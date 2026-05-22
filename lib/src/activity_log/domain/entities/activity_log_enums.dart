@@ -36,6 +36,13 @@ enum ActivityAction {
   businessOpened,
   businessClosed,
 
+  // Inventory
+  inventoryItemAdded,
+  inventoryItemModified,
+  inventoryItemDeleted,
+  inventoryDeducted,
+  inventoryStockAdjusted,
+
   // Financial
   balanceUpdated,
   fundAdded,

@@ -230,6 +230,7 @@ class SavedOrder extends OrderDraft {
     this.cancelledBy,
     this.cancelledAt,
     this.refundRequired = false,
+    this.inventoryDeducted = false,
     required super.lines,
     required super.discountType,
     required super.discountValue,
@@ -254,6 +255,7 @@ class SavedOrder extends OrderDraft {
   final String? cancelledBy;
   final DateTime? cancelledAt;
   final bool refundRequired;
+  final bool inventoryDeducted;
 
   bool get isCancelled => status == OrderStatus.cancelled;
   bool get isRefunded => status == OrderStatus.refunded;
@@ -284,15 +286,17 @@ class SavedOrder extends OrderDraft {
       cancelledBy: map['cancelledBy'] as String?,
       cancelledAt: (map['cancelledAt'] as Timestamp?)?.toDate(),
       refundRequired: map['refundRequired'] ?? false,
+      inventoryDeducted: map['inventoryDeducted'] ?? false,
       lines: items
           .map((i) => OrderLine(
-                item: MenuItem(
-                  id: i['itemId'],
-                  name: i['name'],
-                  category: i['category'],
-                  pricePaise: i['pricePaise'],
-                  available: true, // Not relevant for past orders
-                ),
+                  item: MenuItem(
+                    id: i['itemId'],
+                    name: i['name'],
+                    category: i['category'],
+                    pricePaise: i['pricePaise'],
+                    available: true, // Not relevant for past orders
+                    consumableMappings: Map<String, int>.from(i['consumableMappings'] ?? {}),
+                  ),
                 qty: i['qty'],
               ))
           .toList(),
@@ -334,6 +338,7 @@ class SavedOrder extends OrderDraft {
     String? cancelledBy,
     DateTime? cancelledAt,
     bool? refundRequired,
+    bool? inventoryDeducted,
   }) {
     return SavedOrder(
       id: id ?? this.id,
@@ -350,6 +355,7 @@ class SavedOrder extends OrderDraft {
       cancelledBy: cancelledBy ?? this.cancelledBy,
       cancelledAt: cancelledAt ?? this.cancelledAt,
       refundRequired: refundRequired ?? this.refundRequired,
+      inventoryDeducted: inventoryDeducted ?? this.inventoryDeducted,
       lines: lines ?? this.lines,
       discountType: discountType ?? this.discountType,
       discountValue: discountValue ?? this.discountValue,

@@ -69,6 +69,19 @@ extension ActivityLogEntryX on ActivityLogEntry {
         return 'Business opened';
       case ActivityAction.businessClosed:
         return 'Business closed';
+      case ActivityAction.inventoryItemAdded:
+        return 'Added ${metadata['initialStock'] ?? ''} $targetName'.trim();
+      case ActivityAction.inventoryItemModified:
+        return 'Modified inventory item: $targetName';
+      case ActivityAction.inventoryItemDeleted:
+        return 'Deleted inventory item: $targetName';
+      case ActivityAction.inventoryDeducted:
+        return 'Inventory deducted from ${metadata['orderItems'] ?? 'order'}';
+      case ActivityAction.inventoryStockAdjusted:
+        if (metadata['reason'] == 'Order Cancelled') {
+          return 'Inventory restored from cancelled order';
+        }
+        return 'Updated $targetName stock from ${metadata['previousStock']} → ${metadata['newStock']}';
     }
   }
 
