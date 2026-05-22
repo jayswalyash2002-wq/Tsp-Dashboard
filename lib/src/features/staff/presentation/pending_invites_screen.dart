@@ -185,15 +185,26 @@ class _InviteCard extends ConsumerWidget {
   void _confirmRevoke(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Revoke Invite?'),
         content: const Text('This will permanently delete the invite and the code will no longer work.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
-            onPressed: () {
-              ref.read(inviteServiceProvider).revokeInvite(invite.businessId, invite.id!);
-              Navigator.pop(context);
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              try {
+                await ref.read(inviteServiceProvider).revokeInvite(invite.businessId, invite.id!);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error revoking invite: $e')),
+                  );
+                }
+              }
             },
             child: const Text('Revoke', style: TextStyle(color: Colors.red)),
           ),

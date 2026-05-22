@@ -61,4 +61,61 @@ class InviteService {
       await batch.commit();
     }
   }
+
+  Future<void> claimInvite({
+    required String businessId,
+    required String inviteCode,
+    required String uid,
+    required String displayName,
+  }) async {
+    final invitesRef = _db
+        .collection('businesses')
+        .doc(businessId)
+        .collection('invites');
+
+    final inviteSnap = await invitesRef
+        .where('code', isEqualTo: inviteCode)
+        .where('isUsed', isEqualTo: false)
+        .limit(1)
+        .get();
+
+    if (inviteSnap.docs.isEmpty) {
+      throw Exception('Invalid or expired invite code.');
+    }
+
+    final inviteDoc = inviteSnap.docs.first;
+    final inviteData = inviteDoc.data();
+    final expiresAt = (inviteData['expiresAt'] as Timestamp).toDate();
+
+    if (expiresAt.isBefore(DateTime.now())) {
+      throw Exception('Invite code has expired.');
+    }
+
+    final roleStr = inviteData['role'] as String;
+
+    await _db.runTransaction((transaction) async {
+      // 1. Mark invite as used
+      transaction.update(inviteDoc.reference, {'isUsed': true});
+
+      // 2. Create membership
+      final membershipRef = _db.collection('memberships').doc();
+      transaction.set(membershipRef, {
+        'uid': uid,
+        'businessId': businessId,
+        'role': roleStr.toLowerCase(),
+        'status': 'active',
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdBy': 'system_invite',
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': 'system_invite',
+      });
+
+      // 3. Update user profile with businessId and role
+      final userRef = _db.collection('users').doc(uid);
+      transaction.update(userRef, {
+        'businessId': businessId,
+        'role': roleStr.toUpperCase(),
+      });
+    });
+  }
 }

@@ -53,3 +53,32 @@ class CreateInviteNotifier extends AsyncNotifier<String?> {
 final createInviteProvider = AsyncNotifierProvider<CreateInviteNotifier, String?>(() {
   return CreateInviteNotifier();
 });
+
+class ClaimInviteNotifier extends AutoDisposeAsyncNotifier<void> {
+  @override
+  Future<void> build() async {}
+
+  Future<void> claim({
+    required String businessId,
+    required String inviteCode,
+  }) async {
+    final user = ref.read(authStateChangesProvider).value;
+    if (user == null) throw Exception('User not authenticated');
+
+    final displayName = user.displayName ?? 'New Member';
+
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      await ref.read(inviteServiceProvider).claimInvite(
+            businessId: businessId,
+            inviteCode: inviteCode,
+            uid: user.uid,
+            displayName: displayName,
+          );
+    });
+  }
+}
+
+final claimInviteProvider = AsyncNotifierProvider.autoDispose<ClaimInviteNotifier, void>(() {
+  return ClaimInviteNotifier();
+});

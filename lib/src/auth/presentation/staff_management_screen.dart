@@ -397,16 +397,38 @@ class _InviteDetailSheet extends ConsumerWidget {
   void _confirmRevoke(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Revoke Invite?'),
         content: const Text('This will permanently delete the invite code.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
-            onPressed: () {
-              ref.read(inviteServiceProvider).revokeInvite(invite.businessId, invite.id!);
-              Navigator.pop(context); // dialog
-              Navigator.pop(context); // bottom sheet
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              // 1. Immediately close the confirmation dialog
+              Navigator.of(dialogContext).pop();
+
+              // 2. Perform the async operation
+              try {
+                await ref.read(inviteServiceProvider).revokeInvite(invite.businessId, invite.id!);
+
+                // 3. Close the bottom sheet safely after the operation
+                if (context.mounted) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                    }
+                  });
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error revoking invite: $e')),
+                  );
+                }
+              }
             },
             child: const Text('Revoke', style: TextStyle(color: Colors.red)),
           ),
