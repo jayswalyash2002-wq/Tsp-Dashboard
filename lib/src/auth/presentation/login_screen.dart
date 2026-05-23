@@ -147,6 +147,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       style:
                           TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
+                const SizedBox(height: 16),
+                TextButton.icon(
+                  onPressed: () => context.push('/auth/join'),
+                  icon: const Icon(Icons.vpn_key_outlined),
+                  label: const Text('Join Business with Code'),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50),
+                  ),
+                ),
                 const SizedBox(height: 24),
               ] else ...[
                 TextField(

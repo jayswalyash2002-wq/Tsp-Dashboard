@@ -132,16 +132,13 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
+    final user = ref.read(firebaseAuthProvider).currentUser;
+    final repo = ref.read(businessRepositoryProvider);
 
-    try {
-      final user = ref.read(firebaseAuthProvider).currentUser;
-      if (user == null) return;
-
-      final repo = ref.read(businessRepositoryProvider);
-
-      if (!_isEditMode) {
-        // Step 2 — Soft duplicate check (only for NEW businesses)
+    if (!_isEditMode) {
+      // Step 2 — Soft duplicate check (only for NEW businesses)
+      setState(() => _isLoading = true);
+      try {
         final duplicates = await repo.softDuplicateCheck(
           name: _nameController.text.trim(),
           city: _cityController.text.trim(),
@@ -170,8 +167,40 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
             return;
           }
         }
+      } catch (e) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
       }
+    }
 
+    final businessData = Business(
+      id: '', // Generated in repository
+      uin: '', // Generated in repository
+      businessName: _nameController.text.trim(),
+      ownerName: 'Owner', // Updated in repository or after auth
+      officialEmail: '', // Updated in repository or after auth
+      phoneNumber: _phoneController.text.trim(),
+      secondaryPhoneNumber: _secondaryPhoneController.text.trim().isEmpty ? null : _secondaryPhoneController.text.trim(),
+      businessType: _selectedType ?? 'Other',
+      city: _cityController.text.trim(),
+      area: _areaController.text.trim(),
+      address: _addressController.text.trim(),
+      gstNumber: _gstController.text.trim(),
+      fssaiNumber: _fssaiController.text.trim().isEmpty ? null : _fssaiController.text.trim(),
+      logoUrl: _logoUrl,
+      createdAt: DateTime.now(),
+    );
+
+    if (user == null) {
+      // Unauthenticated flow: Store details and go to Sign Up
+      ref.read(pendingBusinessProvider.notifier).state = businessData;
+      context.push('/auth/signup');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
       final profile = ref.read(userProfileProvider).value;
 
       if (_isEditMode && _existingBusiness != null) {
@@ -209,24 +238,6 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
         }
         final deviceIdentity = ref.read(deviceIdentityProvider).value;
 
-        final businessData = Business(
-          id: '', // Generated in repository
-          uin: '', // Generated in repository
-          businessName: _nameController.text.trim(),
-          ownerName: profile?.displayName ?? 'Owner',
-          officialEmail: profile?.email ?? '',
-          phoneNumber: _phoneController.text.trim(),
-          secondaryPhoneNumber: _secondaryPhoneController.text.trim().isEmpty ? null : _secondaryPhoneController.text.trim(),
-          businessType: _selectedType ?? 'Other',
-          city: _cityController.text.trim(),
-          area: _areaController.text.trim(),
-          address: _addressController.text.trim(),
-          gstNumber: _gstController.text.trim(),
-          fssaiNumber: _fssaiController.text.trim().isEmpty ? null : _fssaiController.text.trim(),
-          logoUrl: _logoUrl,
-          createdAt: DateTime.now(),
-        );
-
         final logTemplate = ActivityLogModel(
           activityLogId: '',
           businessId: '',
@@ -246,7 +257,10 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
 
         await repo.createBusiness(
           uid: user.uid,
-          business: businessData,
+          business: businessData.copyWith(
+            ownerName: profile?.displayName ?? 'Owner',
+            officialEmail: profile?.email ?? '',
+          ),
           logTemplate: logTemplate,
         );
       }
@@ -279,15 +293,12 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: Icon(_isEditMode ? Icons.arrow_back : Icons.arrow_back_rounded),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            if (_isEditMode && Navigator.canPop(context)) {
+            if (Navigator.canPop(context)) {
               Navigator.pop(context);
-            } else if (!_isEditMode) {
-              // Onboarding: Go back to Step 1 (SignUpScreen)
-              context.push('/auth/signup');
             } else {
-              ref.read(firebaseAuthProvider).signOut();
+              context.go('/onboarding');
             }
           },
         ),

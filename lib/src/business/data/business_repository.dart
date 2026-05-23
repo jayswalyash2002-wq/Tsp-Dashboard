@@ -124,7 +124,24 @@ class BusinessRepository {
       'status': 'active',
     });
     
-    // Operation 2: Create FIRST owner membership
+    // Operation 2: Create FIRST owner membership (New structure)
+    final memberRef = _db
+        .collection('businesses')
+        .doc(businessId)
+        .collection('members')
+        .doc(uid);
+    
+    batch.set(memberRef, {
+      'uid': uid,
+      'businessId': businessId,
+      'name': business.ownerName,
+      'email': business.officialEmail,
+      'role': 'owner',
+      'status': 'active',
+      'joinedAt': FieldValue.serverTimestamp(),
+    });
+
+    // Operation 2.1: Create Legacy membership document
     batch.set(membershipRef, {
       'uid': uid,
       'businessId': businessId,
@@ -135,6 +152,13 @@ class BusinessRepository {
       'createdBy': uid,
       'updatedAt': FieldValue.serverTimestamp(),
       'updatedBy': uid,
+    });
+
+    // Operation 2.2: Update user profile with active business and role
+    final userRef = _db.collection('users').doc(uid);
+    batch.update(userRef, {
+      'businessId': businessId,
+      'role': 'OWNER',
     });
 
     // Operation 3: Create business settings

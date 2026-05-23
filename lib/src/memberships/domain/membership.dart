@@ -5,23 +5,28 @@ import '../../core/rbac/permission.dart';
 
 enum MembershipRole {
   owner,
-  partner,
+  admin,
   manager,
-  cashier;
+  cashier,
+  staff,
+  viewer;
 
   static MembershipRole fromString(String value) {
     final normalized = value.trim().toLowerCase();
     for (final role in MembershipRole.values) {
       if (role.name == normalized) return role;
     }
-    debugPrint('MEMBERSHIP_ERROR: Role "$value" is invalid. Defaulting to none/exception.');
-    throw Exception('Invalid membership role: $value');
+    // Fallback for legacy or special cases
+    if (normalized == 'partner') return MembershipRole.owner;
+    
+    debugPrint('MEMBERSHIP_ERROR: Role "$value" is invalid. Defaulting to staff.');
+    return MembershipRole.staff;
   }
 
   Set<Permission> get permissions {
     switch (this) {
       case MembershipRole.owner:
-      case MembershipRole.partner:
+      case MembershipRole.admin:
         return Permission.values.toSet();
       case MembershipRole.manager:
         return {
@@ -38,6 +43,12 @@ enum MembershipRole {
         return {
           Permission.createOrder,
           Permission.editOrder,
+        };
+      case MembershipRole.staff:
+        return {};
+      case MembershipRole.viewer:
+        return {
+          Permission.viewReports,
         };
     }
   }

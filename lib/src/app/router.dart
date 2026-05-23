@@ -6,6 +6,9 @@ import 'package:tsp_dashboard/src/auth/presentation/auth_gate.dart';
 import 'package:tsp_dashboard/src/auth/presentation/login_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/otp_verification_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/sign_up_screen.dart';
+import 'package:tsp_dashboard/src/auth/presentation/intent_selection_screen.dart';
+import 'package:tsp_dashboard/src/core/firebase/firebase_providers.dart';
+import 'package:tsp_dashboard/src/memberships/presentation/join_business_placeholder_screen.dart';
 import 'package:tsp_dashboard/src/dashboard/presentation/dashboard_screen.dart';
 import 'package:tsp_dashboard/src/dashboard/presentation/edit_menu_screen.dart';
 import 'package:tsp_dashboard/src/dashboard/presentation/history_screen.dart';
@@ -34,8 +37,27 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: '/dashboard',
     redirect: (context, state) {
       final path = state.uri.path;
+      
+      final authState = ref.read(authStateChangesProvider);
+      final user = authState.value;
+      
+      final isAuthPath = path.startsWith('/auth');
+      final isBusinessSetup = path.startsWith('/business-setup');
+      final isOnboarding = path == '/onboarding' || path == '/';
 
-      // Centralized Route-Permission mapping
+      // 1. Unauthenticated users should be on /auth, /business-setup, or /onboarding (root)
+      if (user == null && !isAuthPath && !isBusinessSetup && !isOnboarding) {
+        return '/onboarding';
+      }
+
+      // 2. Authenticated users should not be on Login/Signup pages if they have a session
+      // But they MIGHT need to be on setup/join if they haven't finished onboarding.
+      // AuthGate handles the deeper logic, router handles high-level guards.
+      if (user != null && (path == '/auth/login' || path == '/auth/signup' || path == '/onboarding')) {
+        return '/dashboard';
+      }
+
+      // 3. Centralized Route-Permission mapping
       final routePermissions = {
         '/sales-reports': Permission.viewReports,
         '/expense-reports': Permission.viewReports,
@@ -69,6 +91,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'signup',
             builder: (context, state) => const SignUpScreen(),
+          ),
+          GoRoute(
+            path: 'join',
+            builder: (context, state) => const JoinBusinessPlaceholderScreen(),
           ),
           GoRoute(
             path: 'otp',
@@ -131,6 +157,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               final businessId = state.uri.queryParameters['id'];
               return BusinessSetupScreen(businessId: businessId);
             },
+          ),
+          GoRoute(
+            path: '/onboarding',
+            builder: (context, state) => const IntentSelectionScreen(),
           ),
           GoRoute(
             path: '/activity-log',

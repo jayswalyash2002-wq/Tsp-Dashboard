@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tsp_dashboard/src/core/firebase/firebase_providers.dart';
 import 'package:tsp_dashboard/src/constants/roles.dart';
+import 'package:tsp_dashboard/src/auth/data/auth_providers.dart';
 import '../data/invite_service.dart';
 import '../../rbac/domain/models/business_invite.dart';
 
@@ -66,6 +67,7 @@ class ClaimInviteNotifier extends AutoDisposeAsyncNotifier<void> {
     if (user == null) throw Exception('User not authenticated');
 
     final displayName = user.displayName ?? 'New Member';
+    final email = user.email ?? '';
 
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
@@ -74,11 +76,27 @@ class ClaimInviteNotifier extends AutoDisposeAsyncNotifier<void> {
             inviteCode: inviteCode,
             uid: user.uid,
             displayName: displayName,
+            email: email,
           );
+      
+      // Invalidate profile to refresh session
+      ref.invalidate(userProfileProvider);
     });
+  }
+
+  Future<InviteModel?> findInvite(String code) async {
+    try {
+      return await ref.read(inviteServiceProvider).findInviteByCode(code);
+    } catch (e) {
+      print('ClaimInviteNotifier: findInvite failed for code $code: $e');
+      rethrow;
+    }
   }
 }
 
 final claimInviteProvider = AsyncNotifierProvider.autoDispose<ClaimInviteNotifier, void>(() {
   return ClaimInviteNotifier();
 });
+
+/// Holds an invite that was validated BEFORE the user signed in.
+final pendingInviteProvider = StateProvider<InviteModel?>((ref) => null);

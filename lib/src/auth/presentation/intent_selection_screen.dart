@@ -9,28 +9,35 @@ class IntentSelectionScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(authStateChangesProvider).value;
-
     return Scaffold(
-      appBar: AppBar(
-        leading: Navigator.canPop(context) ? const BackButton() : null,
-        backgroundColor: Colors.transparent,
-      ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 40),
+              Center(
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Icon(Icons.dashboard_rounded,
+                      size: 40, color: Theme.of(context).colorScheme.onPrimaryContainer),
+                ),
+              ),
+              const SizedBox(height: 24),
               const Text(
-                'Welcome to TSP',
+                'TSP Dashboard',
                 style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
               const Text(
-                'How would you like to get started?',
+                'The Slow Pour beverage cart operations.',
                 style: TextStyle(fontSize: 16, color: Colors.grey),
                 textAlign: TextAlign.center,
               ),
@@ -40,40 +47,17 @@ class IntentSelectionScreen extends ConsumerWidget {
                 description: 'Set up a new business profile as an owner.',
                 icon: Icons.add_business_outlined,
                 color: Theme.of(context).colorScheme.primary,
-                onTap: () {
-                  if (user != null) {
-                    context.push('/business-setup');
-                  } else {
-                    context.push('/auth/signup');
-                  }
-                },
+                onTap: () => context.push('/business-setup'),
               ),
               const SizedBox(height: 16),
               _IntentCard(
-                title: 'Join an Existing Business',
+                title: 'Join Existing Business',
                 description: 'Enter an invite code from your manager.',
                 icon: Icons.group_outlined,
                 color: Colors.blue,
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const JoinBusinessPlaceholderScreen()),
-                  );
-                },
+                onTap: () => context.push('/auth/join'),
               ),
               const Spacer(),
-              if (user == null)
-                TextButton(
-                  onPressed: () {
-                    debugPrint('INTENT_SCREEN: Navigating to Login');
-                    context.push('/auth/login');
-                  },
-                  child: const Text('Already have an account? Sign In'),
-                )
-              else
-                TextButton(
-                  onPressed: () => ref.read(firebaseAuthProvider).signOut(),
-                  child: const Text('Sign Out'),
-                ),
               const SizedBox(height: 20),
             ],
           ),

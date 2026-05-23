@@ -2,14 +2,18 @@ import 'package:flutter/foundation.dart';
 import 'permission.dart';
 
 enum RoleType {
+  owner,
   admin,
   manager,
   cashier,
+  staff,
+  viewer,
   kitchen,
   accountant;
 
   Set<Permission> get permissions {
     switch (this) {
+      case RoleType.owner:
       case RoleType.admin:
         return Permission.values.toSet();
       case RoleType.manager:
@@ -25,6 +29,12 @@ enum RoleType {
         return {
           Permission.createOrder,
           Permission.editOrder,
+        };
+      case RoleType.staff:
+        return {};
+      case RoleType.viewer:
+        return {
+          Permission.viewReports,
         };
       case RoleType.kitchen:
         return {
@@ -43,8 +53,8 @@ enum RoleType {
     for (final r in RoleType.values) {
       if (r.name == normalized) return r;
     }
-    debugPrint('ROLE_TYPE_ERROR: Legacy role "$role" is invalid. Defaulting to cashier for compatibility.');
-    return RoleType.cashier;
+    debugPrint('ROLE_TYPE_ERROR: Role "$role" is invalid. Defaulting to staff for compatibility.');
+    return RoleType.staff;
   }
 }
 

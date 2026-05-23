@@ -23,3 +23,6 @@ final currentBusinessProvider = StreamProvider<Business?>((ref) {
   
   return ref.watch(businessRepositoryProvider).watchBusiness(businessId);
 });
+
+/// Holds business details entered BEFORE the user signed in.
+final pendingBusinessProvider = StateProvider<Business?>((ref) => null);

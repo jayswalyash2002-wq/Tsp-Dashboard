@@ -64,23 +64,32 @@ class AuthRepository {
     required String email,
     required String password,
   }) async {
-    final cred = await _auth.signInWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-    final user = cred.user;
-    if (user == null) return;
+    try {
+      final cred = await _auth.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      final user = cred.user;
+      if (user == null) return;
 
-    await user.reload(); // Ensure profile is fresh
+      await user.reload(); // Ensure profile is fresh
 
-    // Fetch and auto-set device name from Firestore if it exists
-    final doc = await _db.collection('users').doc(user.uid).get();
-    final name = doc.data()?['displayName'] as String? ?? user.displayName;
-    if (name != null) {
-      await setLocalDeviceName(name);
+      // Fetch and auto-set device name from Firestore if it exists
+      final doc = await _db.collection('users').doc(user.uid).get();
+      final name = doc.data()?['displayName'] as String? ?? user.displayName;
+      if (name != null) {
+        await setLocalDeviceName(name);
+      }
+
+      await _enforceOneDeviceSession(uid: user.uid);
+    } catch (e) {
+      // CRITICAL: If any part of the sign-in flow fails (including device session enforcement),
+      // we MUST sign out of Firebase Auth. This ensures that the AuthGate does not
+      // incorrectly detect an "authenticated" user without a valid session, 
+      // which would trigger onboarding/redirection loops.
+      await _auth.signOut();
+      rethrow;
     }
-
-    await _enforceOneDeviceSession(uid: user.uid);
   }
 
   Future<void> signUpWithEmailPassword({

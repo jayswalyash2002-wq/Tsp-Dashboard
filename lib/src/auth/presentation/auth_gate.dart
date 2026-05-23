@@ -14,12 +14,20 @@ import '../../memberships/data/membership_providers.dart';
 import '../../memberships/domain/membership.dart';
 import '../../memberships/presentation/business_selector_screen.dart';
 import '../../business/presentation/business_setup_screen.dart';
+import '../../business/data/business_providers.dart';
+import '../../core/device/device_providers.dart';
+import '../../activity_log/domain/entities/activity_log_enums.dart';
+import '../../activity_log/data/models/activity_log_model.dart';
+import '../../features/staff/providers/staff_providers.dart';
+
+import 'package:go_router/go_router.dart';
 
 enum _AppState {
   loading,
   intentSelection,
   login,
-  businessSetup, // Step 2
+  businessSetup, 
+  onboarding, // Generic onboarding state
   selectBusiness,
   deviceSetup,
   ready,
@@ -67,6 +75,8 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     final deviceName = ref.watch(deviceNameProvider);
     final authRepoAsync = ref.watch(authRepositoryProvider);
     final userProfileAsync = ref.watch(userProfileProvider);
+    
+    final currentPath = GoRouterState.of(context).uri.path;
 
     final state = _determineState(
       authState: authState,
@@ -74,6 +84,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       session: session,
       deviceName: deviceName,
       profileAsync: userProfileAsync,
+      currentPath: currentPath,
     );
 
     if (kDebugMode && session.businessId != null) {
@@ -88,7 +99,9 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       case _AppState.login:
         return const LoginScreen();
       case _AppState.businessSetup:
-        return const BusinessSetupScreen();
+      case _AppState.onboarding:
+        // Ready to show the child (setup, join, etc)
+        return widget.child ?? const IntentSelectionScreen();
       case _AppState.selectBusiness:
         return BusinessSelectorScreen(memberships: membershipsAsync.value!);
       case _AppState.deviceSetup:
@@ -119,6 +132,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     required SessionState session,
     required String? deviceName,
     required AsyncValue<AppUser?> profileAsync,
+    required String currentPath,
   }) {
     if (authState.isLoading || membershipsAsync.isLoading || profileAsync.isLoading) {
       return _AppState.loading;
@@ -131,8 +145,15 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     final user = authState.value;
     if (user == null) {
       if (kDebugMode) {
-        debugPrint('AUTH_GATE: No Firebase User found. Redirecting to Intent Selection.');
+        debugPrint('AUTH_GATE: No Firebase User found. Checking for landing/onboarding routes.');
       }
+      
+      // ALLOW Onboarding/Landing routes without a user
+      final publicRoutes = ['/auth/join', '/business-setup', '/auth/login', '/auth/signup', '/onboarding'];
+      if (publicRoutes.contains(currentPath)) {
+        return _AppState.onboarding; 
+      }
+
       // Clear session on logout
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (ref.read(sessionProvider).businessId != null) {
@@ -147,19 +168,139 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     }
 
     final memberships = membershipsAsync.value ?? [];
+    final profile = profileAsync.value;
     
+    if (kDebugMode) {
+      debugPrint('AUTH_GATE: Resolved ${memberships.length} memberships. Profile businessId: ${profile?.businessId}');
+    }
+
     // Auth Resolution Flow
     
     // CASE A — empty result (no active memberships)
     if (memberships.isEmpty) {
-      if (kDebugMode) {
-        debugPrint('AUTH_GATE: No memberships found for UID: ${user.uid}. Routing to Business Setup (Step 2)');
+      // If we are still loading profile or memberships, wait.
+      if (profile != null && profile.businessId != null) {
+        if (kDebugMode) {
+          debugPrint('AUTH_GATE: Profile has businessId ${profile.businessId} but memberships list is empty. Waiting for sync...');
+        }
+        return _AppState.loading;
       }
-      return _AppState.businessSetup;
+
+      if (kDebugMode) {
+        debugPrint('AUTH_GATE: No memberships found for UID: ${user.uid}. Routing to Onboarding/Intent Selection.');
+      }
+      
+      // AUTO CLAIM if pending invite exists
+      final pendingInvite = ref.read(pendingInviteProvider);
+      if (pendingInvite != null) {
+        if (kDebugMode) {
+          debugPrint('AUTH_GATE: Found pending invite for ${pendingInvite.businessId}. Auto-claiming...');
+        }
+        
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          // Clear pending immediately to prevent multiple triggers
+          ref.read(pendingInviteProvider.notifier).state = null;
+          
+          try {
+            await ref.read(claimInviteProvider.notifier).claim(
+              businessId: pendingInvite.businessId,
+              inviteCode: pendingInvite.code,
+            );
+          } catch (e) {
+            debugPrint('AUTH_GATE: Auto-claim failed: $e');
+          }
+        });
+        return _AppState.loading;
+      }
+
+      // AUTO CREATE if pending business exists
+      final pendingBusiness = ref.read(pendingBusinessProvider);
+      if (pendingBusiness != null) {
+        if (kDebugMode) {
+          debugPrint('AUTH_GATE: Found pending business "${pendingBusiness.businessName}". Auto-creating...');
+        }
+        
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          // Clear pending immediately
+          ref.read(pendingBusinessProvider.notifier).state = null;
+          
+          try {
+            // Safety check: Don't create if memberships appeared during sync
+            final currentMemberships = ref.read(userMembershipsProvider).value ?? [];
+            if (currentMemberships.isNotEmpty) {
+              debugPrint('AUTH_GATE: User already has memberships. Skipping auto-create.');
+              return;
+            }
+
+            final repo = ref.read(businessRepositoryProvider);
+            final deviceIdentity = ref.read(deviceIdentityProvider).value;
+            final profile = ref.read(userProfileProvider).value;
+
+            final logTemplate = ActivityLogModel(
+              activityLogId: '',
+              businessId: '',
+              performedBy: user.uid,
+              performedByName: profile?.displayName ?? 'Owner',
+              performedByRole: 'owner',
+              action: ActivityAction.businessCreated,
+              category: ActivityCategory.business,
+              metadata: {
+                'businessType': pendingBusiness.businessType,
+                'city': pendingBusiness.city ?? '',
+                'area': pendingBusiness.area ?? '',
+              },
+              appVersion: deviceIdentity?.appVersion ?? 'unknown',
+              platform: deviceIdentity?.platform ?? 'unknown',
+            );
+
+            await repo.createBusiness(
+              uid: user.uid,
+              business: pendingBusiness.copyWith(
+                ownerName: profile?.displayName ?? 'Owner',
+                officialEmail: profile?.email ?? '',
+              ),
+              logTemplate: logTemplate,
+            );
+            
+            ref.invalidate(userProfileProvider);
+          } catch (e) {
+            debugPrint('AUTH_GATE: Auto-create failed: $e');
+          }
+        });
+        return _AppState.loading;
+      }
+
+      // Allow onboarding-related routes to show through
+      final onboardingRoutes = ['/business-setup', '/auth/join', '/onboarding'];
+      if (onboardingRoutes.contains(currentPath)) {
+        return _AppState.onboarding;
+      }
+
+      return _AppState.intentSelection;
     }
 
     // CASE B & C: Resolution
     if (session.businessId == null) {
+      // RESTORATION HINT: Use businessId from user profile if available
+      if (profile?.businessId != null) {
+        final matching = memberships.where((m) => m.businessId == profile!.businessId).firstOrNull;
+        if (matching != null) {
+          if (kDebugMode) {
+            debugPrint('AUTH_GATE: Restoring session from profile businessId: ${matching.businessId}');
+          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ref.read(sessionProvider.notifier).setSession(
+              businessId: matching.businessId,
+              userUid: user.uid,
+              role: matching.role,
+              membershipId: matching.membershipId,
+              branchId: matching.branchId,
+            );
+          });
+          return _AppState.loading;
+        }
+      }
+
       if (memberships.length == 1) {
         // CASE B: Single membership -> auto-resolve
         final m = memberships.first;
@@ -188,7 +329,6 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
     // Device Setup logic
     if (deviceName == null || deviceName.trim().isEmpty) {
-      final profile = profileAsync.value;
       if (profile != null && profile.displayName.trim().isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           final repo = await ref.read(authRepositoryProvider.future);

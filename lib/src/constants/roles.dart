@@ -1,22 +1,27 @@
 enum Role {
   owner,
+  admin,
   manager,
   cashier,
   staff,
+  viewer,
 }
 
 /// A mapping of roles to their respective list of permissions.
-/// 
-/// owner → all permissions
-/// manager → manage_staff, view_reports, edit_menu, process_sale
-/// cashier → process_sale
-/// staff → empty list
 const Map<Role, List<String>> rolePermissions = {
   Role.owner: [
     'manage_staff',
     'view_reports',
     'edit_menu',
     'process_sale',
+    'manage_business',
+  ],
+  Role.admin: [
+    'manage_staff',
+    'view_reports',
+    'edit_menu',
+    'process_sale',
+    'manage_business',
   ],
   Role.manager: [
     'manage_staff',
@@ -28,6 +33,9 @@ const Map<Role, List<String>> rolePermissions = {
     'process_sale',
   ],
   Role.staff: [],
+  Role.viewer: [
+    'view_reports',
+  ],
 };
 
 /// Helper to check if a [Role] has a specific permission [action].

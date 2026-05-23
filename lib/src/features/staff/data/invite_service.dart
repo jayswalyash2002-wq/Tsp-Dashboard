@@ -67,55 +67,122 @@ class InviteService {
     required String inviteCode,
     required String uid,
     required String displayName,
+    required String email,
   }) async {
-    final invitesRef = _db
-        .collection('businesses')
-        .doc(businessId)
-        .collection('invites');
+    try {
+      final invitesRef = _db
+          .collection('businesses')
+          .doc(businessId)
+          .collection('invites');
 
-    final inviteSnap = await invitesRef
-        .where('code', isEqualTo: inviteCode)
-        .where('isUsed', isEqualTo: false)
-        .limit(1)
-        .get();
+      final inviteSnap = await invitesRef
+          .where('code', isEqualTo: inviteCode)
+          .where('isUsed', isEqualTo: false)
+          .limit(1)
+          .get();
 
-    if (inviteSnap.docs.isEmpty) {
-      throw Exception('Invalid or expired invite code.');
-    }
+      if (inviteSnap.docs.isEmpty) {
+        throw Exception('Invalid or expired invite code.');
+      }
 
-    final inviteDoc = inviteSnap.docs.first;
-    final inviteData = inviteDoc.data();
-    final expiresAt = (inviteData['expiresAt'] as Timestamp).toDate();
+      final inviteDoc = inviteSnap.docs.first;
+      final inviteData = inviteDoc.data();
+      final expiresAt = (inviteData['expiresAt'] as Timestamp).toDate();
 
-    if (expiresAt.isBefore(DateTime.now())) {
-      throw Exception('Invite code has expired.');
-    }
+      if (expiresAt.isBefore(DateTime.now())) {
+        throw Exception('Invite code has expired.');
+      }
 
-    final roleStr = inviteData['role'] as String;
+      final roleStr = inviteData['role'] as String;
 
-    await _db.runTransaction((transaction) async {
-      // 1. Mark invite as used
-      transaction.update(inviteDoc.reference, {'isUsed': true});
+      await _db.runTransaction((transaction) async {
+        // 1. Mark invite as used
+        transaction.update(inviteDoc.reference, {'isUsed': true});
 
-      // 2. Create membership
-      final membershipRef = _db.collection('memberships').doc();
-      transaction.set(membershipRef, {
-        'uid': uid,
-        'businessId': businessId,
-        'role': roleStr.toLowerCase(),
-        'status': 'active',
-        'createdAt': FieldValue.serverTimestamp(),
-        'createdBy': 'system_invite',
-        'updatedAt': FieldValue.serverTimestamp(),
-        'updatedBy': 'system_invite',
+        // 2. Create membership in businesses/{businessId}/members/{userId}
+        final memberRef = _db
+            .collection('businesses')
+            .doc(businessId)
+            .collection('members')
+            .doc(uid);
+        
+        transaction.set(memberRef, {
+          'uid': uid,
+          'businessId': businessId,
+          'name': displayName,
+          'email': email,
+          'role': roleStr.toLowerCase(),
+          'status': 'active',
+          'joinedAt': FieldValue.serverTimestamp(),
+        });
+
+        // 2.1 Create Legacy membership document
+        // This ensures the userMembershipsProvider can find it.
+        final membershipRef = _db.collection('memberships').doc();
+        transaction.set(membershipRef, {
+          'uid': uid,
+          'businessId': businessId,
+          'branchId': null,
+          'role': roleStr.toLowerCase(),
+          'status': 'active',
+          'createdAt': FieldValue.serverTimestamp(),
+          'createdBy': 'invite_system',
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedBy': 'invite_system',
+        });
+
+        // 3. Update user profile with businessId and role (Legacy support)
+        final userRef = _db.collection('users').doc(uid);
+        transaction.update(userRef, {
+          'businessId': businessId,
+          'role': roleStr.toUpperCase(),
+        });
       });
+    } catch (e, s) {
+      print('FIRESTORE_ERROR: claimInvite failed for business $businessId, code $inviteCode');
+      print('Error: $e');
+      print('Stacktrace: $s');
+      rethrow;
+    }
+  }
 
-      // 3. Update user profile with businessId and role
-      final userRef = _db.collection('users').doc(uid);
-      transaction.update(userRef, {
-        'businessId': businessId,
-        'role': roleStr.toUpperCase(),
-      });
-    });
+  Future<InviteModel?> findInviteByCode(String code) async {
+    try {
+      print('DEBUG: Searching for invite code: $code');
+      // Collection Group query to find the invite across all businesses
+      // We simplify the query to use only one where clause to potentially 
+      // reduce index requirements, and handle 'isUsed' check in memory.
+      final snapshot = await _db
+          .collectionGroup('invites')
+          .where('code', isEqualTo: code)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        print('DEBUG: No invite found with code: $code');
+        return null;
+      }
+      
+      final doc = snapshot.docs.first;
+      final invite = InviteModel.fromMap(doc.data(), doc.id);
+      
+      if (invite.isUsed) {
+        print('DEBUG: Invite code $code found but already used.');
+        return null;
+      }
+      
+      print('DEBUG: Invite found for business: ${invite.businessId}');
+      return invite;
+    } catch (e, s) {
+      print('FIRESTORE_ERROR: findInviteByCode failed for code $code');
+      print('Error: $e');
+      if (e.toString().contains('failed-precondition')) {
+        print('INSTRUCTION: This query requires a Collection Group index for "invites".');
+        print('Go to the Firebase Console -> Firestore -> Indexes -> Composite.');
+        print('Create an index for Collection ID: invites, Field: code (Ascending), Query Scope: Collection Group.');
+      }
+      print('Stacktrace: $s');
+      rethrow;
+    }
   }
 }

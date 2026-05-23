@@ -8,7 +8,8 @@ final membershipRepositoryProvider = Provider<MembershipRepository>((ref) {
   return MembershipRepository(ref.watch(firestoreProvider));
 });
 
-final userMembershipsProvider = StreamProvider<List<Membership>>((ref) {
+/// Internal provider for legacy membership structure
+final legacyMembershipsProvider = StreamProvider<List<Membership>>((ref) {
   final user = ref.watch(authStateChangesProvider).value;
   if (user == null) return Stream.value([]);
   
@@ -21,6 +22,52 @@ final userMembershipsProvider = StreamProvider<List<Membership>>((ref) {
       .map((snapshot) => snapshot.docs
           .map((doc) => Membership.fromMap(doc.data(), doc.id))
           .toList());
+});
+
+/// Internal provider for new multi-tenant membership structure
+final newMembershipsProvider = StreamProvider<List<Membership>>((ref) {
+  final user = ref.watch(authStateChangesProvider).value;
+  if (user == null) return Stream.value([]);
+  
+  final db = ref.watch(firestoreProvider);
+  return db
+      .collectionGroup('members')
+      .where('uid', isEqualTo: user.uid)
+      .where('status', isEqualTo: 'active')
+      .snapshots()
+      .map((snapshot) => snapshot.docs
+          .map((doc) => Membership.fromMap(doc.data(), doc.id))
+          .toList());
+});
+
+/// Unified provider that combines both legacy and new membership structures.
+/// This ensures existing users and new staff members are all correctly restored.
+final userMembershipsProvider = Provider<AsyncValue<List<Membership>>>((ref) {
+  final legacy = ref.watch(legacyMembershipsProvider);
+  final newOnes = ref.watch(newMembershipsProvider);
+
+  if (legacy.isLoading || newOnes.isLoading) return const AsyncLoading();
+  
+  // If one fails, we still try to show the other if possible, 
+  // but if both fail or the error is critical, we report it.
+  if (legacy.hasError && newOnes.hasError) {
+    return AsyncError(legacy.error!, legacy.stackTrace!);
+  }
+
+  final legacyList = legacy.value ?? [];
+  final newList = newOnes.value ?? [];
+  
+  final combined = [...legacyList, ...newList];
+  final seenBusinessIds = <String>{};
+  final result = <Membership>[];
+  
+  for (final m in combined) {
+    if (m.businessId.isNotEmpty && seenBusinessIds.add(m.businessId)) {
+      result.add(m);
+    }
+  }
+  
+  return AsyncData(result);
 });
 
 class SessionState {

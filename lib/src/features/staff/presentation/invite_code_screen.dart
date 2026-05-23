@@ -120,11 +120,17 @@ class _InviteCodeScreenState extends ConsumerState<InviteCodeScreen> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: QrImageView(
-                    data: 'tsp-invite:$businessId:${widget.code}',
-                    version: QrVersions.auto,
-                    size: 200.0,
-                    backgroundColor: Colors.white,
+                  child: Builder(
+                    builder: (context) {
+                      final qrData = 'TSPJOIN:$businessId:${widget.code}';
+                      debugPrint('GENERATED QR PAYLOAD: $qrData');
+                      return QrImageView(
+                        data: qrData,
+                        version: QrVersions.auto,
+                        size: 200.0,
+                        backgroundColor: Colors.white,
+                      );
+                    }
                   ),
                 ),
               const SizedBox(height: 48),
