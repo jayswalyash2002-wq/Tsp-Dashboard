@@ -10,6 +10,8 @@ import '../../business/data/business_providers.dart';
 import '../../business/domain/business.dart';
 import '../../features/rbac/domain/models/business_invite.dart';
 import 'package:tsp_dashboard/src/auth/data/auth_providers.dart';
+import '../../core/utils/password_validator.dart';
+import '../../auth/presentation/widgets/password_requirements_view.dart';
 
 class JoinBusinessPlaceholderScreen extends ConsumerStatefulWidget {
   const JoinBusinessPlaceholderScreen({super.key});
@@ -104,6 +106,13 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
         
         if (name.isEmpty) {
           _setError('Please enter your full name.');
+          setState(() => _isAuthBusy = false);
+          return;
+        }
+
+        final passwordResult = PasswordValidator.validate(password);
+        if (!passwordResult.isValid) {
+          _setError('Password does not meet requirements.');
           setState(() => _isAuthBusy = false);
           return;
         }
@@ -346,6 +355,7 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
                 TextField(
                   controller: _passwordController,
                   obscureText: true,
+                  onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
                     labelText: 'Password',
                     prefixIcon: const Icon(Icons.lock_outline),
@@ -355,6 +365,8 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
                 const SizedBox(height: 16),
 
                 if (!_isSignInMode) ...[
+                  PasswordRequirementsView(password: _passwordController.text),
+                  const SizedBox(height: 16),
                   TextField(
                     controller: _confirmPasswordController,
                     obscureText: true,

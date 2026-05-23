@@ -8,6 +8,9 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:tsp_dashboard/src/constants/roles.dart';
 import 'package:tsp_dashboard/src/features/rbac/domain/models/business_invite.dart';
 import 'package:tsp_dashboard/src/features/staff/providers/staff_providers.dart';
+import '../../core/rbac/role.dart' as rbac;
+import '../../memberships/data/membership_providers.dart';
+import '../../memberships/domain/membership.dart';
 import '../data/auth_providers.dart';
 import '../domain/app_user.dart';
 
@@ -129,12 +132,15 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _ActiveStaffTab extends StatelessWidget {
+class _ActiveStaffTab extends ConsumerWidget {
   const _ActiveStaffTab({required this.staffAsync});
   final AsyncValue<List<AppUser>> staffAsync;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentSession = ref.watch(sessionProvider);
+    final isOwner = currentSession.role == MembershipRole.owner;
+
     return staffAsync.when(
       data: (staffList) {
         if (staffList.isEmpty) {
@@ -151,17 +157,38 @@ class _ActiveStaffTab extends StatelessWidget {
           itemCount: staffList.length,
           itemBuilder: (context, index) {
             final staff = staffList[index];
+            final canRemove = isOwner && staff.uid != currentSession.userUid;
+            final isSelf = staff.uid == currentSession.userUid;
+
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: ListTile(
                 leading: CircleAvatar(
                   backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                  child: Text(staff.displayName[0].toUpperCase()),
+                  child: Text(staff.displayName.isEmpty ? '?' : staff.displayName[0].toUpperCase()),
                 ),
-                title: Text(staff.displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(staff.roleType.name.toUpperCase()),
-                trailing: const _StatusBadge(label: 'Active', color: Colors.green),
+                title: Text(
+                  isSelf ? '${staff.displayName} (You)' : staff.displayName,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Row(
+                  children: [
+                    _RoleBadge(role: staff.roleType),
+                    if (!staff.isActive)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 8),
+                        child: Text('• Inactive', style: TextStyle(color: Colors.red, fontSize: 12)),
+                      ),
+                  ],
+                ),
+                trailing: canRemove
+                    ? IconButton(
+                        icon: const Icon(Icons.person_remove_outlined, color: Colors.red),
+                        onPressed: () => _confirmRemove(context, ref, staff),
+                        tooltip: 'Remove Member',
+                      )
+                    : null,
               ),
             );
           },
@@ -169,6 +196,85 @@ class _ActiveStaffTab extends StatelessWidget {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Error: $e')),
+    );
+  }
+
+  void _confirmRemove(BuildContext context, WidgetRef ref, AppUser staff) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Remove ${staff.displayName}?'),
+        content: Text(
+          'This will revoke their access to this business immediately. '
+          '${staff.roleType == rbac.RoleType.owner ? "Caution: You are removing an owner." : ""}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              try {
+                final repo = ref.read(staffRepositoryProvider);
+                if (repo == null) throw Exception('Staff repository not available');
+                
+                await repo.removeMember(staff.uid);
+                
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('${staff.displayName} removed successfully')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Remove', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoleBadge extends StatelessWidget {
+  const _RoleBadge({required this.role});
+  final rbac.RoleType role;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    Color color;
+    switch (role) {
+      case rbac.RoleType.owner:
+        color = Colors.purple;
+      case rbac.RoleType.admin:
+        color = Colors.blue;
+      case rbac.RoleType.manager:
+        color = Colors.orange;
+      case rbac.RoleType.cashier:
+        color = Colors.green;
+      default:
+        color = Colors.grey;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        role.name.toUpperCase(),
+        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+      ),
     );
   }
 }

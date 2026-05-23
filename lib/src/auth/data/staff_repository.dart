@@ -12,17 +12,70 @@ class StaffRepository {
   /// Fetches all staff members belonging to a specific business.
   Stream<List<AppUser>> watchStaff() {
     debugPrint('STAFF_REPO: Watching staff for businessId: $_businessId');
+    
+    // Primary source of truth: businesses/{id}/members
     return _db
-        .collection('users')
-        .where('businessId', isEqualTo: _businessId)
+        .collection('businesses')
+        .doc(_businessId)
+        .collection('members')
         .snapshots()
         .map((snapshot) {
-      final staff = snapshot.docs
-          .map((doc) => AppUser.fromMap(doc.data()))
-          .toList();
-      
-      // Strict isolation filter
-      return staff.where((u) => u.businessId == _businessId).toList();
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return AppUser(
+          uid: data['uid'] ?? doc.id,
+          email: data['email'] ?? '',
+          displayName: data['name'] ?? '',
+          roleType: RoleType.fromString(data['role'] ?? 'staff'),
+          businessId: _businessId,
+          isActive: data['status'] == 'active',
+        );
+      }).toList();
+    });
+  }
+
+  /// Removes a member from the business.
+  Future<void> removeMember(String uid) async {
+    debugPrint('STAFF_REPO: Removing member $uid from business $_businessId');
+
+    // 1. Pre-check: Is this the last owner? 
+    final membersRef = _db.collection('businesses').doc(_businessId).collection('members');
+    final ownersSnap = await membersRef.where('role', isEqualTo: 'owner').get();
+    
+    final isTargetOwner = ownersSnap.docs.any((doc) => doc.id == uid);
+    if (isTargetOwner && ownersSnap.docs.length <= 1) {
+      throw Exception('Cannot remove the last owner of the business.');
+    }
+
+    // 2. Fetch legacy membership document(s) before transaction
+    final legacyMembershipsRef = _db.collection('memberships');
+    final legacySnap = await legacyMembershipsRef
+        .where('uid', isEqualTo: uid)
+        .where('businessId', isEqualTo: _businessId)
+        .get();
+    
+    await _db.runTransaction((tx) async {
+      // 3. Delete member from business sub-collection
+      tx.delete(membersRef.doc(uid));
+
+      // 4. Delete legacy membership document(s)
+      for (var doc in legacySnap.docs) {
+        tx.delete(doc.reference);
+      }
+
+      // 5. Update user profile to clear active business if it matches
+      final userRef = _db.collection('users').doc(uid);
+      final userSnap = await tx.get(userRef);
+      if (userSnap.exists) {
+        final userData = userSnap.data();
+        final currentActiveBiz = userData?['businessId'] as String?;
+        if (currentActiveBiz == _businessId) {
+          tx.update(userRef, {
+            'businessId': null,
+            'role': 'CASHIER', // Reset to a safe default
+          });
+        }
+      }
     });
   }
 

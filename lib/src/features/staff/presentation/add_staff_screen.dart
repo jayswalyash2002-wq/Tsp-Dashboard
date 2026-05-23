@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tsp_dashboard/src/constants/roles.dart';
 import 'package:tsp_dashboard/src/auth/data/auth_providers.dart';
+import '../../../core/rbac/role.dart' as rbac;
+import '../../../memberships/data/membership_providers.dart';
+import '../../../memberships/domain/membership.dart';
 import '../providers/staff_providers.dart';
 
 class AddStaffScreen extends ConsumerStatefulWidget {
@@ -111,11 +114,23 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                 ),
                 items: Role.values.map((role) {
+                  // Only owners can invite other owners
+                  final currentSession = ref.watch(sessionProvider);
+                  final isOwner = currentSession.role == MembershipRole.owner;
+                  
+                  if (role == Role.owner && !isOwner) {
+                    return const DropdownMenuItem<Role>(
+                      value: null,
+                      enabled: false,
+                      child: Text('OWNER (Owner only)'),
+                    );
+                  }
+
                   return DropdownMenuItem(
                     value: role,
                     child: Text(role.name.toUpperCase()),
                   );
-                }).toList(),
+                }).where((item) => item.value != null).toList(),
               ),
               const SizedBox(height: 20),
               TextFormField(

@@ -6,6 +6,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../data/auth_providers.dart';
 import '../../core/firebase/firebase_providers.dart';
+import '../../core/utils/password_validator.dart';
+import 'widgets/password_requirements_view.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key});
@@ -61,16 +63,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     if (phone.length < 10) return false;
     if (email.isEmpty || !email.contains('@')) return false;
 
-    // Password is always required and must meet complexity rules
-    if (p.length < 8 || 
-        !p.contains(RegExp(r'[A-Z]')) || 
-        !p.contains(RegExp(r'[a-z]')) || 
-        !p.contains(RegExp(r'\d')) || 
-        !p.contains(RegExp(r'[@$!%*?&]'))) {
-      return false;
-    }
-
-    return true;
+    return PasswordValidator.validate(p).isValid;
   }
 
   bool get _needsVerification {
@@ -255,26 +248,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   ),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Required';
-                  final regex = RegExp(r'^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$');
-                  if (!regex.hasMatch(v)) {
-                    return 'Password must contain:\n• Minimum 8 characters\n• At least 1 uppercase letter\n• At least 1 lowercase letter\n• At least 1 number\n• At least 1 special character';
-                  }
-                  return null;
-                },
+                validator: PasswordValidator.getError,
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'Password must contain:',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey),
-              ),
-              const SizedBox(height: 8),
-              _RequirementItem('Minimum 8 characters', hasMinLength),
-              _RequirementItem('At least 1 uppercase letter', hasUppercase),
-              _RequirementItem('At least 1 lowercase letter', hasLowercase),
-              _RequirementItem('At least 1 number', hasDigits),
-              _RequirementItem('At least 1 special character', hasSpecialCharacters),
+              const SizedBox(height: 16),
+              PasswordRequirementsView(password: _passwordController.text),
               const SizedBox(height: 40),
               FilledButton(
                 onPressed: (_busy || !_isFormValid) ? null : _submit,
@@ -289,29 +266,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _RequirementItem(String text, bool isMet) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Icon(
-            isMet ? Icons.check_circle_rounded : Icons.cancel_rounded,
-            color: isMet ? Colors.green : Colors.red,
-            size: 16,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 12,
-              color: isMet ? Colors.green : Colors.red,
-            ),
-          ),
-        ],
       ),
     );
   }
