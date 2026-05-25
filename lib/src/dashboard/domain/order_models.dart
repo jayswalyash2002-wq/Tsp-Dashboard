@@ -295,7 +295,13 @@ class SavedOrder extends OrderDraft {
                     category: i['category'],
                     pricePaise: i['pricePaise'],
                     available: true, // Not relevant for past orders
-                    consumableMappings: Map<String, int>.from(i['consumableMappings'] ?? {}),
+                    consumableMappings: (i['consumableMappings'] as Map<dynamic, dynamic>?)?.map(
+                          (key, value) => MapEntry(
+                            key.toString(),
+                            value is int ? value : (int.tryParse(value.toString()) ?? 0),
+                          ),
+                        ) ??
+                        {},
                   ),
                 qty: i['qty'],
               ))

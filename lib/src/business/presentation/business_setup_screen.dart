@@ -269,11 +269,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
       ref.invalidate(currentBusinessProvider);
 
       if (mounted) {
-        if (Navigator.canPop(context)) {
-          Navigator.pop(context);
-        } else {
-          context.go('/dashboard');
-        }
+        context.go('/dashboard');
       }
     } catch (e) {
       if (mounted) {

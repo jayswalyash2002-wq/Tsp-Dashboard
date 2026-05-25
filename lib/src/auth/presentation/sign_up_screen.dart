@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -22,8 +23,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _busy = false;
   bool _obscurePassword = true;
+  bool _showPasswordRequirements = false;
   
   String? _initialEmail;
   String? _initialPhone;
@@ -36,6 +39,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     _phoneController.addListener(_updateState);
     _emailController.addListener(_updateState);
     _passwordController.addListener(_updateState);
+    _confirmPasswordController.addListener(_updateState);
   }
 
   void _updateState() => setState(() {});
@@ -46,10 +50,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     _phoneController.removeListener(_updateState);
     _emailController.removeListener(_updateState);
     _passwordController.removeListener(_updateState);
+    _confirmPasswordController.removeListener(_updateState);
     _nameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -58,10 +64,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     final phone = _phoneController.text.trim();
     final email = _emailController.text.trim();
     final p = _passwordController.text;
+    final cp = _confirmPasswordController.text;
 
     if (name.isEmpty) return false;
     if (phone.length < 10) return false;
     if (email.isEmpty || !email.contains('@')) return false;
+    if (p != cp) return false;
 
     return PasswordValidator.validate(p).isValid;
   }
@@ -79,12 +87,20 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   }
 
   void _submit() async {
+    final password = _passwordController.text;
+    final passwordResult = PasswordValidator.validate(password);
+    
+    if (!passwordResult.isValid) {
+      setState(() => _showPasswordRequirements = true);
+      _formKey.currentState!.validate(); // Trigger UI validation errors
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
     final email = _emailController.text.trim();
-    final password = _passwordController.text;
 
     final user = ref.read(firebaseAuthProvider).currentUser;
 
@@ -112,6 +128,26 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         onCodeSent: (verificationId, resendToken) {
           if (!mounted) return;
           setState(() => _busy = false);
+
+          if (kDebugMode) {
+            final otpService = ref.read(otpServiceProvider);
+            final code = otpService.lastGeneratedCode;
+            if (code != null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Development OTP: $code'),
+                  backgroundColor: Theme.of(context).colorScheme.secondary,
+                  duration: const Duration(seconds: 15),
+                  behavior: SnackBarBehavior.floating,
+                  action: SnackBarAction(
+                    label: 'OK',
+                    textColor: Colors.white,
+                    onPressed: () {},
+                  ),
+                ),
+              );
+            }
+          }
           
           context.push(
             Uri(
@@ -164,13 +200,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         }
       });
     }
-
-    final p = _passwordController.text;
-    final hasMinLength = p.length >= 8;
-    final hasUppercase = p.contains(RegExp(r'[A-Z]'));
-    final hasLowercase = p.contains(RegExp(r'[a-z]'));
-    final hasDigits = p.contains(RegExp(r'\d'));
-    final hasSpecialCharacters = p.contains(RegExp(r'[@$!%*?&]'));
 
     return Scaffold(
       appBar: AppBar(
@@ -251,10 +280,29 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 validator: PasswordValidator.getError,
               ),
               const SizedBox(height: 16),
-              PasswordRequirementsView(password: _passwordController.text),
+              PasswordRequirementsView(
+                password: _passwordController.text,
+                forceShow: _showPasswordRequirements,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _confirmPasswordController,
+                obscureText: _obscurePassword,
+                decoration: InputDecoration(
+                  labelText: 'Confirm Password',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                validator: (v) {
+                  if (v != _passwordController.text) {
+                    return 'Passwords do not match';
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 40),
               FilledButton(
-                onPressed: (_busy || !_isFormValid) ? null : _submit,
+                onPressed: _busy ? null : _submit,
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(60),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -268,5 +316,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         ),
       ),
     );
+
   }
 }

@@ -38,7 +38,13 @@ class MenuItem {
       categorySortOrder: data['categorySortOrder'] ?? 0,
       businessId: data['businessId']?.toString(),
       isDeleted: data['isDeleted'] == true,
-      consumableMappings: Map<String, int>.from(data['consumableMappings'] ?? {}),
+      consumableMappings: (data['consumableMappings'] as Map<dynamic, dynamic>?)?.map(
+            (key, value) => MapEntry(
+              key.toString(),
+              value is int ? value : (int.tryParse(value.toString()) ?? 0),
+            ),
+          ) ??
+          {},
     );
   }
 
@@ -78,6 +84,33 @@ class MenuItem {
       'isDeleted': isDeleted,
       'consumableMappings': consumableMappings,
     };
+  }
+}
+
+class CategoryModel {
+  final String id;
+  final String name;
+  final int orderIndex;
+  final List<MenuItem> items;
+
+  CategoryModel({
+    required this.id,
+    required this.name,
+    required this.orderIndex,
+    required this.items,
+  });
+
+  CategoryModel copyWith({
+    String? name,
+    int? orderIndex,
+    List<MenuItem>? items,
+  }) {
+    return CategoryModel(
+      id: id,
+      name: name ?? this.name,
+      orderIndex: orderIndex ?? this.orderIndex,
+      items: items ?? this.items,
+    );
   }
 }
 

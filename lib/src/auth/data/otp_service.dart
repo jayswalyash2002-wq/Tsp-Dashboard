@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
@@ -6,23 +7,34 @@ import 'package:uuid/uuid.dart';
 abstract class OtpService {
   Future<String> sendOtp(String phoneNumber);
   Future<bool> verifyOtp(String verificationId, String code);
+  
+  /// For development/testing visibility only.
+  String? get lastGeneratedCode;
 }
 
 /// Mock implementation for development and stabilization.
 class MockOtpService implements OtpService {
   // Simple in-memory storage for active verification sessions
   final Map<String, String> _sessions = {};
-  final String _demoOtp = '123456';
+  String? _lastCode;
+
+  @override
+  String? get lastGeneratedCode => _lastCode;
 
   @override
   Future<String> sendOtp(String phoneNumber) async {
-    debugPrint('MOCK_OTP: Sending demo OTP ($_demoOtp) to $phoneNumber');
+    // Generate a random 6-digit OTP
+    final random = Random();
+    final code = (100000 + random.nextInt(900000)).toString();
+    _lastCode = code;
+
+    debugPrint('MOCK_OTP: Sending random OTP ($code) to $phoneNumber');
     
     // Simulate network delay
     await Future.delayed(const Duration(seconds: 1));
     
     final verificationId = const Uuid().v4();
-    _sessions[verificationId] = _demoOtp;
+    _sessions[verificationId] = code;
     
     return verificationId;
   }
@@ -43,6 +55,7 @@ class MockOtpService implements OtpService {
     
     if (isValid) {
       _sessions.remove(verificationId);
+      _lastCode = null; // Clear after use
     }
     
     return isValid;

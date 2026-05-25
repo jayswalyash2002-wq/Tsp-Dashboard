@@ -41,11 +41,18 @@ class InventoryRepository {
         final snap = await transaction.get(docRef);
 
         if (snap.exists) {
-          final currentStock = (snap.data() as Map<String, dynamic>)['stock'] ?? 0;
+          final data = snap.data() as Map<String, dynamic>;
+          final currentStock = data['stock'] ?? 0;
+          final itemName = data['name'] ?? 'Unknown';
+          
+          print('INVENTORY_REPO: Deducting $qtyToDeduct from $itemName (Current: $currentStock)');
+          
           transaction.update(docRef, {
             'stock': currentStock - qtyToDeduct,
             'updatedAt': FieldValue.serverTimestamp(),
           });
+        } else {
+          print('INVENTORY_REPO: WARNING - Inventory item $itemId not found for deduction');
         }
       }
     });

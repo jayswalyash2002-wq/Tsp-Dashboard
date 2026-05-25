@@ -18,6 +18,15 @@ class Business {
   final String? logoUrl;
   final DateTime createdAt;
   final String? status;
+  
+  // Auto Business Hours
+  final bool autoOpenEnabled;
+  final bool autoCloseEnabled;
+  final String openingTime;
+  final String closingTime;
+  final String businessStatus; // 'open' or 'closed'
+  final bool manualOverride;
+  final DateTime? lastStatusUpdate;
 
   Business({
     required this.id,
@@ -37,6 +46,13 @@ class Business {
     this.logoUrl,
     required this.createdAt,
     this.status = 'active',
+    this.autoOpenEnabled = false,
+    this.autoCloseEnabled = false,
+    this.openingTime = '09:00',
+    this.closingTime = '22:00',
+    this.businessStatus = 'open',
+    this.manualOverride = false,
+    this.lastStatusUpdate,
   });
 
   bool get isGstRegistered => gstNumber != null && gstNumber!.trim().isNotEmpty;
@@ -60,6 +76,13 @@ class Business {
       logoUrl: map['logoUrl'],
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       status: map['status'] ?? 'active',
+      autoOpenEnabled: map['autoOpenEnabled'] ?? false,
+      autoCloseEnabled: map['autoCloseEnabled'] ?? false,
+      openingTime: map['openingTime'] ?? '09:00',
+      closingTime: map['closingTime'] ?? '22:00',
+      businessStatus: map['businessStatus'] ?? 'open',
+      manualOverride: map['manualOverride'] ?? false,
+      lastStatusUpdate: (map['lastStatusUpdate'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -82,6 +105,13 @@ class Business {
       'logoUrl': logoUrl,
       'createdAt': createdAt, 
       'status': status,
+      'autoOpenEnabled': autoOpenEnabled,
+      'autoCloseEnabled': autoCloseEnabled,
+      'openingTime': openingTime,
+      'closingTime': closingTime,
+      'businessStatus': businessStatus,
+      'manualOverride': manualOverride,
+      'lastStatusUpdate': lastStatusUpdate != null ? Timestamp.fromDate(lastStatusUpdate!) : null,
     };
   }
 
@@ -109,6 +139,13 @@ class Business {
     String? logoUrl,
     DateTime? createdAt,
     String? status,
+    bool? autoOpenEnabled,
+    bool? autoCloseEnabled,
+    String? openingTime,
+    String? closingTime,
+    String? businessStatus,
+    bool? manualOverride,
+    DateTime? lastStatusUpdate,
   }) {
     return Business(
       id: id ?? this.id,
@@ -128,6 +165,13 @@ class Business {
       logoUrl: logoUrl ?? this.logoUrl,
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
+      autoOpenEnabled: autoOpenEnabled ?? this.autoOpenEnabled,
+      autoCloseEnabled: autoCloseEnabled ?? this.autoCloseEnabled,
+      openingTime: openingTime ?? this.openingTime,
+      closingTime: closingTime ?? this.closingTime,
+      businessStatus: businessStatus ?? this.businessStatus,
+      manualOverride: manualOverride ?? this.manualOverride,
+      lastStatusUpdate: lastStatusUpdate ?? this.lastStatusUpdate,
     );
   }
 }

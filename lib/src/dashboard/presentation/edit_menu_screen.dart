@@ -6,8 +6,6 @@ import '../data/dashboard_providers.dart';
 import '../domain/menu_item.dart';
 import '../../activity_log/presentation/providers/activity_log_providers.dart';
 import '../../activity_log/domain/entities/activity_log_enums.dart';
-import '../../core/rbac/permission.dart';
-import '../../core/rbac/permission_gate.dart';
 import '../../inventory/data/inventory_providers.dart';
 import '../../inventory/domain/inventory_item.dart';
 
@@ -61,67 +59,74 @@ class EditMenuScreen extends ConsumerWidget {
             grouped.putIfAbsent(cat, () => []).add(item);
           }
 
-          // 2. Sort items within categories by sortOrder.
-          for (final list in grouped.values) {
-            list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-          }
-
-          // 3. Sort categories by their first item's categorySortOrder.
-          final sortedCategories = grouped.keys.toList()
+          // 2. Map to CategoryModel and sort.
+          final categories = grouped.entries.map((e) {
+            final catItems = e.value..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+            return CategoryModel(
+              id: e.key,
+              name: e.key,
+              orderIndex: catItems.firstOrNull?.categorySortOrder ?? 0,
+              items: catItems,
+            );
+          }).toList()
             ..sort((a, b) {
-              final orderA = grouped[a]?.firstOrNull?.categorySortOrder ?? 0;
-              final orderB = grouped[b]?.firstOrNull?.categorySortOrder ?? 0;
-              final res = orderA.compareTo(orderB);
-              if (res != 0) return res;
-              return a.compareTo(b);
+              if (a.orderIndex != b.orderIndex) return a.orderIndex.compareTo(b.orderIndex);
+              return a.name.compareTo(b.name);
             });
 
-          // 4. Flatten the structure for ReorderableListView, respecting expansion state.
-          final flattened = <dynamic>[];
-          for (final cat in sortedCategories) {
-            flattened.add(cat);
-            if (expandedCategories.contains(cat)) {
-              flattened.addAll(grouped[cat]!);
-            }
-          }
-
           return ReorderableListView.builder(
-            itemCount: flattened.length,
+            itemCount: categories.length,
             buildDefaultDragHandles: false,
             padding: const EdgeInsets.only(bottom: 80),
-            onReorder: (oldIndex, newIndex) => _onReorder(ref, flattened, oldIndex, newIndex),
+            onReorder: (oldIndex, newIndex) => _onCategoryReorder(ref, categories, oldIndex, newIndex),
             itemBuilder: (context, index) {
-              final node = flattened[index];
+              final category = categories[index];
+              final isExpanded = expandedCategories.contains(category.name);
 
-              if (node is String) {
-                final isExpanded = expandedCategories.contains(node);
-                return _CategoryHeader(
-                  key: ValueKey('cat_$node'),
-                  name: node,
-                  isExpanded: isExpanded,
-                  index: index,
-                  onToggle: () {
-                    final current = ref.read(expandedCategoriesProvider);
-                    if (isExpanded) {
-                      ref.read(expandedCategoriesProvider.notifier).state =
-                          current.where((c) => c != node).toSet();
-                    } else {
-                      ref.read(expandedCategoriesProvider.notifier).state = {...current, node};
-                    }
-                  },
-                  onAddItem: () => _showEditDialog(context, ref, initialCategory: node),
-                  onDelete: () => _showDeleteCategoryConfirm(context, ref, node, grouped[node] ?? []),
-                );
-              }
-
-              final menuItem = node as MenuItem;
-              return _MenuItemTile(
-                key: ValueKey(menuItem.id),
-                item: menuItem,
-                index: index,
-                onTap: () => _showEditDialog(context, ref, item: menuItem),
-                onDelete: () => _showDeleteConfirm(context, ref, menuItem),
-                onStatusChange: (val) => _updateItemStatus(ref, menuItem, val),
+              return Column(
+                key: ValueKey('category_wrapper_${category.id}'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _CategoryHeader(
+                    name: category.name,
+                    isExpanded: isExpanded,
+                    index: index,
+                    onToggle: () {
+                      final current = ref.read(expandedCategoriesProvider);
+                      if (isExpanded) {
+                        ref.read(expandedCategoriesProvider.notifier).state =
+                            current.where((c) => c != category.name).toSet();
+                      } else {
+                        ref.read(expandedCategoriesProvider.notifier).state = {...current, category.name};
+                      }
+                    },
+                    onAddItem: () => _showEditDialog(context, ref, initialCategory: category.name),
+                    onDelete: () => _showDeleteCategoryConfirm(context, ref, category.name, category.items),
+                  ),
+                  Visibility(
+                    visible: isExpanded,
+                    maintainState: true,
+                    child: ReorderableListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: category.items.length,
+                      buildDefaultDragHandles: false,
+                      onReorder: (oldItemIndex, newItemIndex) =>
+                          _onItemReorder(ref, category, oldItemIndex, newItemIndex),
+                      itemBuilder: (context, itemIndex) {
+                        final menuItem = category.items[itemIndex];
+                        return _MenuItemTile(
+                          key: ValueKey('menu_item_${menuItem.id}'),
+                          item: menuItem,
+                          index: itemIndex,
+                          onTap: () => _showEditDialog(context, ref, item: menuItem),
+                          onDelete: () => _showDeleteConfirm(context, ref, menuItem),
+                          onStatusChange: (val) => _updateItemStatus(ref, menuItem, val),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               );
             },
           );
@@ -135,15 +140,7 @@ class EditMenuScreen extends ConsumerWidget {
   void _updateItemStatus(WidgetRef ref, MenuItem item, bool val) {
     final repo = ref.read(menuRepositoryProvider);
     if (repo == null) return;
-    repo.updateMenuItem(MenuItem(
-      id: item.id,
-      name: item.name,
-      pricePaise: item.pricePaise,
-      category: item.category,
-      available: val,
-      sortOrder: item.sortOrder,
-      categorySortOrder: item.categorySortOrder,
-    ));
+    repo.updateMenuItem(item.copyWith(available: val));
 
     unawaited(
       ref.read(logActivityUseCaseProvider).execute(
@@ -157,55 +154,63 @@ class EditMenuScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _onReorder(WidgetRef ref, List<dynamic> list, int oldIndex, int newIndex) async {
+  Future<void> _onCategoryReorder(
+    WidgetRef ref,
+    List<CategoryModel> categories,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final repo = ref.read(menuRepositoryProvider);
+    if (repo == null) return;
+
     if (oldIndex < newIndex) {
       newIndex -= 1;
     }
 
-    final item = list.removeAt(oldIndex);
+    final category = categories.removeAt(oldIndex);
+    categories.insert(newIndex, category);
 
-    // If moving a category, we must also move all items in that category (if they are in the list)
-    if (item is String) {
-      final itemsToMove = <MenuItem>[];
-      while (oldIndex < list.length && list[oldIndex] is MenuItem) {
-        itemsToMove.add(list.removeAt(oldIndex) as MenuItem);
-      }
-      final targetIndex = newIndex.clamp(0, list.length);
-      list.insert(targetIndex, item);
-      list.insertAll(targetIndex + 1, itemsToMove);
-    } else {
-      list.insert(newIndex, item);
-    }
-
-    // Persist changes to Firestore
-    final repo = ref.read(menuRepositoryProvider);
-    if (repo == null) return;
-    String currentCategory = 'Uncategorized';
-    int catOrder = 0;
-    int itemOrder = 0;
-
-    for (final element in list) {
-      if (element is String) {
-        currentCategory = element;
-        catOrder++;
-        itemOrder = 0;
-      } else if (element is MenuItem) {
-        final updatedItem = MenuItem(
-          id: element.id,
-          name: element.name,
-          pricePaise: element.pricePaise,
-          category: currentCategory,
-          available: element.available,
-          sortOrder: itemOrder++,
-          categorySortOrder: catOrder,
-        );
-        if (updatedItem.sortOrder != element.sortOrder ||
-            updatedItem.categorySortOrder != element.categorySortOrder ||
-            updatedItem.category != element.category) {
-          await repo.updateMenuItem(updatedItem);
+    // Persist updated categorySortOrder for all items in all categories.
+    // Use parallel updates to improve performance and consistency.
+    final List<Future<void>> updates = [];
+    for (int i = 0; i < categories.length; i++) {
+      final cat = categories[i];
+      for (final item in cat.items) {
+        final updated = item.copyWith(categorySortOrder: i);
+        if (updated.categorySortOrder != item.categorySortOrder) {
+          updates.add(repo.updateMenuItem(updated));
         }
       }
     }
+    await Future.wait(updates);
+  }
+
+  Future<void> _onItemReorder(
+    WidgetRef ref,
+    CategoryModel category,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final repo = ref.read(menuRepositoryProvider);
+    if (repo == null) return;
+
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+
+    final items = List<MenuItem>.from(category.items);
+    final item = items.removeAt(oldIndex);
+    items.insert(newIndex, item);
+
+    // Update sortOrder for items in this category.
+    final List<Future<void>> updates = [];
+    for (int i = 0; i < items.length; i++) {
+      final updated = items[i].copyWith(sortOrder: i);
+      if (updated.sortOrder != items[i].sortOrder) {
+        updates.add(repo.updateMenuItem(updated));
+      }
+    }
+    await Future.wait(updates);
   }
 
   void _showAddCategoryDialog(BuildContext context, WidgetRef ref) {
@@ -329,14 +334,38 @@ class _EditMenuItemDialogState extends ConsumerState<_EditMenuItemDialog> {
             try {
               final repo = ref.read(menuRepositoryProvider);
               if (repo == null) return;
+              
               if (item == null) {
+                // Determine the correct categorySortOrder and sortOrder for the new item
+                final currentItems = ref.read(menuItemsProvider).value ?? [];
+                
+                // 1. Find if category already exists to inherit its sort order
+                int categorySortOrder = 0;
+                int maxSortOrder = -1;
+                
+                final sameCategoryItems = currentItems.where((i) => i.category == cat).toList();
+                if (sameCategoryItems.isNotEmpty) {
+                  categorySortOrder = sameCategoryItems.first.categorySortOrder;
+                  for (final i in sameCategoryItems) {
+                    if (i.sortOrder > maxSortOrder) maxSortOrder = i.sortOrder;
+                  }
+                } else {
+                  // New category: find the current max categorySortOrder
+                  int maxCatOrder = -1;
+                  for (final i in currentItems) {
+                    if (i.categorySortOrder > maxCatOrder) maxCatOrder = i.categorySortOrder;
+                  }
+                  categorySortOrder = maxCatOrder + 1;
+                }
+
                 final newItem = MenuItem(
                   id: '',
                   name: name,
                   category: cat,
                   pricePaise: price.toInt(),
                   available: true,
-                  sortOrder: 999,
+                  sortOrder: maxSortOrder + 1,
+                  categorySortOrder: categorySortOrder,
                   consumableMappings: _consumableMappings,
                 );
                 await repo.addMenuItem(newItem);
@@ -556,68 +585,67 @@ class _ConsumableMappingSectionState extends ConsumerState<_ConsumableMappingSec
   }
 }
 
-  void _showDeleteCategoryConfirm(BuildContext context, WidgetRef ref, String category, List<MenuItem> items) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Delete $category?'),
-        content: Text(items.isEmpty
-            ? 'Are you sure you want to delete this empty category?'
-            : 'This will delete the category and all ${items.length} items inside it. This action cannot be easily undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              final repo = ref.read(menuRepositoryProvider);
-              if (repo != null) {
-                for (final item in items) {
-                  await repo.deleteMenuItem(item.id);
-                }
+void _showDeleteCategoryConfirm(BuildContext context, WidgetRef ref, String category, List<MenuItem> items) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Delete $category?'),
+      content: Text(items.isEmpty
+          ? 'Are you sure you want to delete this empty category?'
+          : 'This will delete the category and all ${items.length} items inside it. This action cannot be easily undone.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () async {
+            final repo = ref.read(menuRepositoryProvider);
+            if (repo != null) {
+              for (final item in items) {
+                await repo.deleteMenuItem(item.id);
               }
-              if (context.mounted) Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Category $category deleted')),
+            }
+            if (context.mounted) Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Category $category deleted')),
+            );
+          },
+          child: const Text('Delete All', style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ),
+  );
+}
+
+void _showDeleteConfirm(BuildContext context, WidgetRef ref, MenuItem item) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Delete Item?'),
+      content: Text('Are you sure you want to delete ${item.name}?'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () {
+            final repo = ref.read(menuRepositoryProvider);
+            if (repo != null) {
+              repo.deleteMenuItem(item.id);
+              unawaited(
+                ref.read(logActivityUseCaseProvider).execute(
+                      action: ActivityAction.menuItemDeleted,
+                      category: ActivityCategory.operational,
+                      targetType: 'menuItem',
+                      targetId: item.id,
+                      targetName: item.name,
+                    ),
               );
-            },
-            child: const Text('Delete All', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDeleteConfirm(BuildContext context, WidgetRef ref, MenuItem item) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Item?'),
-        content: Text('Are you sure you want to delete ${item.name}?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              final repo = ref.read(menuRepositoryProvider);
-              if (repo != null) {
-                repo.deleteMenuItem(item.id);
-                unawaited(
-                  ref.read(logActivityUseCaseProvider).execute(
-                        action: ActivityAction.menuItemDeleted,
-                        category: ActivityCategory.operational,
-                        targetType: 'menuItem',
-                        targetId: item.id,
-                        targetName: item.name,
-                      ),
-                );
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-
+            }
+            Navigator.pop(context);
+          },
+          child: const Text('Delete', style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ),
+  );
+}
 
 class _CategoryHeader extends StatelessWidget {
   const _CategoryHeader({
@@ -676,7 +704,7 @@ class _CategoryHeader extends StatelessWidget {
                     children: [
                       Icon(Icons.delete_sweep_outlined, size: 20, color: cs.error),
                       const SizedBox(width: 12),
-                      Text('Delete Category', style: TextStyle(color: cs.error)),
+                      const Text('Delete Category', style: TextStyle(color: Colors.red)),
                     ],
                   ),
                 ),
@@ -765,7 +793,7 @@ class _MenuItemTile extends StatelessWidget {
                   children: [
                     Icon(Icons.delete_outline, size: 20, color: cs.error),
                     const SizedBox(width: 12),
-                    Text('Delete Item', style: TextStyle(color: cs.error)),
+                    Text('Delete Item', style: TextStyle(color: Colors.red)),
                   ],
                 ),
               ),

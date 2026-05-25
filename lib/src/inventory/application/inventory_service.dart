@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../activity_log/domain/entities/activity_log_enums.dart';
 import '../../activity_log/presentation/providers/activity_log_providers.dart';
@@ -77,6 +78,8 @@ class InventoryService {
     final Map<String, int> totalDeductions = {};
     for (final line in lines) {
       final mappings = line.item.consumableMappings;
+      debugPrint('INVENTORY_SERVICE: Item "${line.item.name}" has mappings: $mappings');
+      
       if (mappings.isEmpty) continue;
 
       mappings.forEach((itemId, qty) {
@@ -86,12 +89,14 @@ class InventoryService {
     }
 
     if (totalDeductions.isNotEmpty) {
+      debugPrint('INVENTORY_SERVICE: Deducting from inventory: $totalDeductions');
       await _inventoryRepo.deductInventory(totalDeductions);
       
       // Update order flag
       await _db.collection('orders').doc(orderId).update({
         'inventoryDeducted': true,
       });
+      // ...
 
       final orderItems = lines.map((l) => l.item.name).join(', ');
 

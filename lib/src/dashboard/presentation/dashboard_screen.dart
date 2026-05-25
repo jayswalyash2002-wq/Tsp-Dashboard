@@ -10,6 +10,8 @@ import '../domain/order_models.dart';
 import 'widgets/sticky_cart_bar.dart';
 
 import '../../memberships/data/membership_providers.dart';
+import '../../business/data/business_providers.dart';
+import '../../business/application/business_service.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -19,7 +21,11 @@ class DashboardScreen extends ConsumerWidget {
     final profileAsync = ref.watch(userProfileProvider);
     final session = ref.watch(sessionProvider);
     final user = ref.watch(firebaseAuthProvider).currentUser;
+    final businessAsync = ref.watch(currentBusinessProvider);
     
+    // Initialize business lifecycle check
+    ref.watch(businessLifecycleProvider);
+
     String userName = 'User';
     
     profileAsync.whenData((profile) {
@@ -48,6 +54,30 @@ class DashboardScreen extends ConsumerWidget {
             ? (isCancelled ? 'View Cancelled Order' : 'Edit Order')
             : 'TSP Dashboard'),
         actions: [
+          businessAsync.when(
+            data: (biz) {
+              if (biz == null) return const SizedBox.shrink();
+              final isOpen = biz.businessStatus == 'open';
+              return Container(
+                margin: const EdgeInsets.only(right: 8),
+                child: Chip(
+                  label: Text(
+                    isOpen ? 'OPEN' : 'CLOSED',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  backgroundColor: isOpen ? Colors.green : Colors.red,
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                ),
+              );
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
           if (orderState.isEditing)
             TextButton(
               onPressed: () => ref.read(orderControllerProvider.notifier).clear(),
@@ -147,9 +177,19 @@ class DashboardScreen extends ConsumerWidget {
                                   return _MenuCard(
                                     item: item,
                                     qtyInOrder: draft.lineFor(item.id)?.qty ?? 0,
-                                    onTap: isCancelled
-                                        ? () {} // Read-only
-                                        : () => ref.read(orderControllerProvider.notifier).add(item),
+                                    onTap: () {
+                                      if (isCancelled) return;
+                                      
+                                      final biz = businessAsync.value;
+                                      if (biz != null && biz.businessStatus == 'closed') {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Business is currently closed.')),
+                                        );
+                                        return;
+                                      }
+                                      
+                                      ref.read(orderControllerProvider.notifier).add(item);
+                                    },
                                   );
                                 },
                                 childCount: grouped[category]!.length,

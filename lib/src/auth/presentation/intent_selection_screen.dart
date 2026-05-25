@@ -41,13 +41,13 @@ class IntentSelectionScreen extends ConsumerWidget {
                 style: TextStyle(fontSize: 16, color: Colors.grey),
                 textAlign: TextAlign.center,
               ),
-              const Spacer(),
+              const SizedBox(height: 48),
               _IntentCard(
                 title: 'Create a Business',
                 description: 'Set up a new business profile as an owner.',
                 icon: Icons.add_business_outlined,
                 color: Theme.of(context).colorScheme.primary,
-                onTap: () => context.push('/business-setup'),
+                onTap: () => context.push('/auth/signup'),
               ),
               const SizedBox(height: 16),
               _IntentCard(
@@ -58,6 +58,19 @@ class IntentSelectionScreen extends ConsumerWidget {
                 onTap: () => context.push('/auth/join'),
               ),
               const Spacer(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Already have an account?',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  TextButton(
+                    onPressed: () => context.push('/auth/login'),
+                    child: const Text('Sign In'),
+                  ),
+                ],
+              ),
               const SizedBox(height: 20),
             ],
           ),

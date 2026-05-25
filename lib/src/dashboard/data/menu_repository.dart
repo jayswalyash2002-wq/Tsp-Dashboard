@@ -18,7 +18,9 @@ class MenuRepository {
     return _db
         .collection('menu')
         .where('businessId', isEqualTo: _businessId)
-        .where('isDeleted', isNotEqualTo: true)
+        .where('isDeleted', isEqualTo: false)
+        .orderBy('categorySortOrder')
+        .orderBy('sortOrder')
         .snapshots()
         .map((snap) {
       final items = snap.docs

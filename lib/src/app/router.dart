@@ -6,6 +6,7 @@ import 'package:tsp_dashboard/src/auth/presentation/auth_gate.dart';
 import 'package:tsp_dashboard/src/auth/presentation/login_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/otp_verification_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/sign_up_screen.dart';
+import 'package:tsp_dashboard/src/auth/presentation/forgot_password_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/intent_selection_screen.dart';
 import 'package:tsp_dashboard/src/core/firebase/firebase_providers.dart';
 import 'package:tsp_dashboard/src/memberships/presentation/join_business_placeholder_screen.dart';
@@ -50,10 +51,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         return '/onboarding';
       }
 
-      // 2. Authenticated users should not be on Login/Signup pages if they have a session
-      // But they MIGHT need to be on setup/join if they haven't finished onboarding.
-      // AuthGate handles the deeper logic, router handles high-level guards.
-      if (user != null && (path == '/auth/login' || path == '/auth/signup' || path == '/onboarding')) {
+      // 2. Authenticated users should not be on Login pages if they have a session
+      // We allow /auth/signup and /onboarding to persist because they handle 
+      // the "authenticated but no business" state via AuthGate.
+      if (user != null && path == '/auth/login') {
         return '/dashboard';
       }
 
@@ -81,23 +82,32 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(
+        path: '/auth/forgot-password',
+        name: 'forgot-password',
+        builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
         path: '/auth',
         builder: (context, state) => const AuthGate(),
         routes: [
           GoRoute(
             path: 'login',
+            name: 'login',
             builder: (context, state) => const LoginScreen(),
           ),
           GoRoute(
             path: 'signup',
+            name: 'signup',
             builder: (context, state) => const SignUpScreen(),
           ),
           GoRoute(
             path: 'join',
+            name: 'join',
             builder: (context, state) => const JoinBusinessPlaceholderScreen(),
           ),
           GoRoute(
             path: 'otp',
+            name: 'otp',
             builder: (context, state) {
               final params = state.uri.queryParameters;
               return OtpVerificationScreen(

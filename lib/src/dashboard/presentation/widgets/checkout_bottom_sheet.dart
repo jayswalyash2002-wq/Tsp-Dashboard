@@ -6,6 +6,7 @@ import 'cancellation_dialog.dart';
 import 'order_shared_widgets.dart';
 import '../../../core/rbac/permission.dart';
 import '../../../core/rbac/permission_gate.dart';
+import '../../../business/data/business_providers.dart';
 
 class CheckoutBottomSheet extends ConsumerStatefulWidget {
   const CheckoutBottomSheet({super.key});
@@ -21,6 +22,8 @@ class _CheckoutBottomSheetState extends ConsumerState<CheckoutBottomSheet> {
     final draft = orderState.draft;
     final isCancelled = orderState.originalOrder?.isCancelled ?? false;
     final cs = Theme.of(context).colorScheme;
+    final business = ref.watch(currentBusinessProvider).value;
+    final isClosed = business != null && business.businessStatus == 'closed';
 
     return DraggableScrollableSheet(
       initialChildSize: 0.85, // increased initial size for better visibility
@@ -243,8 +246,28 @@ class _CheckoutBottomSheetState extends ConsumerState<CheckoutBottomSheet> {
                         ),
                         child: Column(
                           children: [
+                            if (isClosed)
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.lock_clock, color: Colors.red, size: 18),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Business is currently closed.',
+                                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             FilledButton(
-                              onPressed: (!draft.hasItems || !draft.splitValid)
+                              onPressed: (!draft.hasItems || !draft.splitValid || isClosed)
                                   ? null
                                   : () async {
                                       final messenger = ScaffoldMessenger.of(context);

@@ -6,6 +6,7 @@ import '../../business/data/business_providers.dart';
 import '../../core/rbac/permission.dart';
 import '../../core/rbac/permission_gate.dart';
 import '../../core/theme/theme_providers.dart';
+import '../../business/application/business_service.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -35,8 +36,172 @@ class SettingsScreen extends ConsumerWidget {
           const SizedBox(height: 24),
           _SectionHeader(title: 'BUSINESS'),
           const _BusinessSettingsSection(),
+          const SizedBox(height: 24),
+          _SectionHeader(title: 'BUSINESS HOURS'),
+          const _BusinessHoursSection(),
         ],
       ),
+    );
+  }
+}
+
+class _BusinessHoursSection extends ConsumerWidget {
+  const _BusinessHoursSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final businessAsync = ref.watch(currentBusinessProvider);
+    final service = ref.watch(businessServiceProvider);
+
+    return businessAsync.when(
+      data: (business) {
+        if (business == null) return const SizedBox.shrink();
+
+        final isOpen = business.businessStatus == 'open';
+
+        return PermissionGate(
+          permission: Permission.accessSettings,
+          child: Column(
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Current Status',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          Chip(
+                            label: Text(
+                              isOpen ? 'OPEN' : 'CLOSED',
+                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                            ),
+                            backgroundColor: isOpen ? Colors.green : Colors.red,
+                          ),
+                        ],
+                      ),
+                      const Divider(),
+                      SwitchListTile(
+                        title: const Text('Manual Override'),
+                        subtitle: const Text('Manually control business status'),
+                        value: business.manualOverride,
+                        onChanged: (val) => service.toggleManualOverride(business, val),
+                      ),
+                      if (business.manualOverride)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: SegmentedButton<String>(
+                            segments: const [
+                              ButtonSegment(
+                                value: 'open',
+                                label: Text('OPEN'),
+                                icon: Icon(Icons.door_front_door),
+                              ),
+                              ButtonSegment(
+                                value: 'closed',
+                                label: Text('CLOSED'),
+                                icon: Icon(Icons.lock),
+                              ),
+                            ],
+                            selected: {business.businessStatus},
+                            onSelectionChanged: (val) =>
+                                service.setBusinessStatus(business, val.first),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Card(
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      title: const Text('Auto Open'),
+                      subtitle: Text('Open at ${business.openingTime}'),
+                      value: business.autoOpenEnabled,
+                      onChanged: (val) {
+                        ref.read(businessRepositoryProvider).updateBusiness(
+                          business.copyWith(autoOpenEnabled: val),
+                        );
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Auto Close'),
+                      subtitle: Text('Close at ${business.closingTime}'),
+                      value: business.autoCloseEnabled,
+                      onChanged: (val) {
+                        ref.read(businessRepositoryProvider).updateBusiness(
+                          business.copyWith(autoCloseEnabled: val),
+                        );
+                      },
+                    ),
+                    const Divider(),
+                    ListTile(
+                      title: const Text('Opening Time'),
+                      trailing: Text(
+                        business.openingTime,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      onTap: () async {
+                        final parts = business.openingTime.split(':');
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay(
+                            hour: int.parse(parts[0]),
+                            minute: int.parse(parts[1]),
+                          ),
+                        );
+                        if (time != null) {
+                          final formatted =
+                              '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+                          ref.read(businessRepositoryProvider).updateBusiness(
+                            business.copyWith(openingTime: formatted),
+                          );
+                        }
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Closing Time'),
+                      trailing: Text(
+                        business.closingTime,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      onTap: () async {
+                        final parts = business.closingTime.split(':');
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay(
+                            hour: int.parse(parts[0]),
+                            minute: int.parse(parts[1]),
+                          ),
+                        );
+                        if (time != null) {
+                          final formatted =
+                              '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+                          ref.read(businessRepositoryProvider).updateBusiness(
+                            business.copyWith(closingTime: formatted),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Text('Error loading business: $e'),
     );
   }
 }

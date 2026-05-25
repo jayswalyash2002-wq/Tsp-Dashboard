@@ -149,7 +149,15 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       }
       
       // ALLOW Onboarding/Landing routes without a user
-      final publicRoutes = ['/auth/join', '/business-setup', '/auth/login', '/auth/signup', '/onboarding'];
+      final publicRoutes = [
+        '/auth/join',
+        '/auth/signup',
+        '/auth/otp',
+        '/business-setup',
+        '/auth/login',
+        '/auth/forgot-password',
+        '/onboarding'
+      ];
       if (publicRoutes.contains(currentPath)) {
         return _AppState.onboarding; 
       }
@@ -271,7 +279,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       }
 
       // Allow onboarding-related routes to show through
-      final onboardingRoutes = ['/business-setup', '/auth/join', '/onboarding'];
+      final onboardingRoutes = ['/business-setup', '/auth/join', '/auth/signup', '/auth/otp', '/onboarding'];
       if (onboardingRoutes.contains(currentPath)) {
         return _AppState.onboarding;
       }
