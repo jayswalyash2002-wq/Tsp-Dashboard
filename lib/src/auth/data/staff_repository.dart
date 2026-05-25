@@ -22,15 +22,54 @@ class StaffRepository {
         .map((snapshot) {
       return snapshot.docs.map((doc) {
         final data = doc.data();
-        return AppUser(
-          uid: data['uid'] ?? doc.id,
-          email: data['email'] ?? '',
-          displayName: data['name'] ?? '',
-          roleType: RoleType.fromString(data['role'] ?? 'staff'),
-          businessId: _businessId,
-          isActive: data['status'] == 'active',
-        );
+        return AppUser.fromMap({
+          ...data,
+          'uid': data['uid'] ?? doc.id,
+          'displayName': data['name'] ?? '',
+          'role': data['role'] ?? 'staff',
+          'isActive': data['status'] == 'active',
+          'businessId': _businessId,
+        });
       }).toList();
+    });
+  }
+
+  /// Updates a staff member's role and permissions.
+  Future<void> updateStaffMember(AppUser staff) async {
+    debugPrint('STAFF_REPO: Updating member ${staff.uid} in business $_businessId');
+    
+    final memberRef = _db
+        .collection('businesses')
+        .doc(_businessId)
+        .collection('members')
+        .doc(staff.uid);
+    
+    final Map<String, bool> overridesMap = {};
+    staff.permissionOverrides.forEach((key, value) {
+      overridesMap[key.name] = value;
+    });
+
+    await _db.runTransaction((tx) async {
+      // 1. Update business member document
+      tx.update(memberRef, {
+        'role': staff.roleType.name,
+        'permissions': overridesMap,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // 2. Sync to legacy user profile if necessary
+      final userRef = _db.collection('users').doc(staff.uid);
+      final userSnap = await tx.get(userRef);
+      if (userSnap.exists) {
+        final userData = userSnap.data();
+        if (userData?['businessId'] == _businessId) {
+          tx.update(userRef, {
+            'role': staff.roleType.name.toUpperCase(),
+            'permissions': overridesMap,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
     });
   }
 

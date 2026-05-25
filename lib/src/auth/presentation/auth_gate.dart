@@ -78,6 +78,10 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     
     final currentPath = GoRouterState.of(context).uri.path;
 
+    if (kDebugMode && authState.value != null) {
+      debugPrint('STEP_5_AUTH_GATE_RESOLUTION: Path=$currentPath, Auth=${authState.value?.uid}, Memberships=${membershipsAsync.value?.length ?? 'loading'}, Profile=${userProfileAsync.value != null ? 'loaded' : 'loading'}');
+    }
+
     final state = _determineState(
       authState: authState,
       membershipsAsync: membershipsAsync,
@@ -135,17 +139,21 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     required String currentPath,
   }) {
     if (authState.isLoading || membershipsAsync.isLoading || profileAsync.isLoading) {
+      if (kDebugMode) {
+        debugPrint('AUTH_GATE: Loading... auth=${authState.isLoading}, memberships=${membershipsAsync.isLoading}, profile=${profileAsync.isLoading}');
+      }
       return _AppState.loading;
     }
     
     if (authState.hasError || membershipsAsync.hasError || profileAsync.hasError) {
+      debugPrint('AUTH_GATE_ERROR: authErr=${authState.error}, membershipErr=${membershipsAsync.error}, profileErr=${profileAsync.error}');
       return _AppState.error;
     }
 
     final user = authState.value;
     if (user == null) {
       if (kDebugMode) {
-        debugPrint('AUTH_GATE: No Firebase User found. Checking for landing/onboarding routes.');
+        debugPrint('AUTH_GATE: No Firebase User found. Path: $currentPath');
       }
       
       // ALLOW Onboarding/Landing routes without a user
@@ -165,6 +173,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       // Clear session on logout
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (ref.read(sessionProvider).businessId != null) {
+          debugPrint('AUTH_GATE: Clearing session on logout');
           ref.read(sessionProvider.notifier).clear();
         }
       });
@@ -172,14 +181,14 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     }
 
     if (kDebugMode) {
-      debugPrint('AUTH_GATE: Firebase User authenticated: ${user.uid}');
+      debugPrint('AUTH_GATE: User: ${user.uid}, Email: ${user.email}');
     }
 
     final memberships = membershipsAsync.value ?? [];
     final profile = profileAsync.value;
     
     if (kDebugMode) {
-      debugPrint('AUTH_GATE: Resolved ${memberships.length} memberships. Profile businessId: ${profile?.businessId}');
+      debugPrint('AUTH_GATE: Memberships: ${memberships.length}, Profile BusinessId: ${profile?.businessId}');
     }
 
     // Auth Resolution Flow
@@ -189,26 +198,32 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       // If we are still loading profile or memberships, wait.
       if (profile != null && profile.businessId != null) {
         if (kDebugMode) {
-          debugPrint('AUTH_GATE: Profile has businessId ${profile.businessId} but memberships list is empty. Waiting for sync...');
+          debugPrint('AUTH_GATE: Profile has businessId but memberships empty. Waiting...');
         }
         return _AppState.loading;
       }
 
-      if (kDebugMode) {
-        debugPrint('AUTH_GATE: No memberships found for UID: ${user.uid}. Routing to Onboarding/Intent Selection.');
-      }
+      // If we are on a protected route but memberships are empty, wait a bit
+      // to avoid race conditions after signup/invite claim.
+      final onboardingRoutes = ['/business-setup', '/auth/join', '/auth/signup', '/auth/otp', '/onboarding'];
+      final isProtected = !onboardingRoutes.contains(currentPath) && currentPath != '/';
       
+      if (isProtected) {
+        if (kDebugMode) {
+          debugPrint('AUTH_GATE: Protected route $currentPath with no memberships. Waiting for sync...');
+        }
+        return _AppState.loading;
+      }
+
       // AUTO CLAIM if pending invite exists
       final pendingInvite = ref.read(pendingInviteProvider);
       if (pendingInvite != null) {
         if (kDebugMode) {
-          debugPrint('AUTH_GATE: Found pending invite for ${pendingInvite.businessId}. Auto-claiming...');
+          debugPrint('AUTH_GATE: Auto-claiming pending invite for ${pendingInvite.businessId}');
         }
         
         WidgetsBinding.instance.addPostFrameCallback((_) async {
-          // Clear pending immediately to prevent multiple triggers
           ref.read(pendingInviteProvider.notifier).state = null;
-          
           try {
             await ref.read(claimInviteProvider.notifier).claim(
               businessId: pendingInvite.businessId,
@@ -221,65 +236,11 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         return _AppState.loading;
       }
 
-      // AUTO CREATE if pending business exists
-      final pendingBusiness = ref.read(pendingBusinessProvider);
-      if (pendingBusiness != null) {
-        if (kDebugMode) {
-          debugPrint('AUTH_GATE: Found pending business "${pendingBusiness.businessName}". Auto-creating...');
-        }
-        
-        WidgetsBinding.instance.addPostFrameCallback((_) async {
-          // Clear pending immediately
-          ref.read(pendingBusinessProvider.notifier).state = null;
-          
-          try {
-            // Safety check: Don't create if memberships appeared during sync
-            final currentMemberships = ref.read(userMembershipsProvider).value ?? [];
-            if (currentMemberships.isNotEmpty) {
-              debugPrint('AUTH_GATE: User already has memberships. Skipping auto-create.');
-              return;
-            }
-
-            final repo = ref.read(businessRepositoryProvider);
-            final deviceIdentity = ref.read(deviceIdentityProvider).value;
-            final profile = ref.read(userProfileProvider).value;
-
-            final logTemplate = ActivityLogModel(
-              activityLogId: '',
-              businessId: '',
-              performedBy: user.uid,
-              performedByName: profile?.displayName ?? 'Owner',
-              performedByRole: 'owner',
-              action: ActivityAction.businessCreated,
-              category: ActivityCategory.business,
-              metadata: {
-                'businessType': pendingBusiness.businessType,
-                'city': pendingBusiness.city ?? '',
-                'area': pendingBusiness.area ?? '',
-              },
-              appVersion: deviceIdentity?.appVersion ?? 'unknown',
-              platform: deviceIdentity?.platform ?? 'unknown',
-            );
-
-            await repo.createBusiness(
-              uid: user.uid,
-              business: pendingBusiness.copyWith(
-                ownerName: profile?.displayName ?? 'Owner',
-                officialEmail: profile?.email ?? '',
-              ),
-              logTemplate: logTemplate,
-            );
-            
-            ref.invalidate(userProfileProvider);
-          } catch (e) {
-            debugPrint('AUTH_GATE: Auto-create failed: $e');
-          }
-        });
-        return _AppState.loading;
+      if (kDebugMode) {
+        debugPrint('AUTH_GATE: No memberships found. Path: $currentPath');
       }
 
       // Allow onboarding-related routes to show through
-      final onboardingRoutes = ['/business-setup', '/auth/join', '/auth/signup', '/auth/otp', '/onboarding'];
       if (onboardingRoutes.contains(currentPath)) {
         return _AppState.onboarding;
       }
@@ -294,7 +255,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         final matching = memberships.where((m) => m.businessId == profile!.businessId).firstOrNull;
         if (matching != null) {
           if (kDebugMode) {
-            debugPrint('AUTH_GATE: Restoring session from profile businessId: ${matching.businessId}');
+            debugPrint('AUTH_GATE: Restoring session: ${matching.businessId}');
           }
           WidgetsBinding.instance.addPostFrameCallback((_) {
             ref.read(sessionProvider.notifier).setSession(
@@ -310,10 +271,9 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       }
 
       if (memberships.length == 1) {
-        // CASE B: Single membership -> auto-resolve
         final m = memberships.first;
         if (kDebugMode) {
-          debugPrint('AUTH_GATE: Auto-resolving business ${m.businessId} with role ${m.role.name}');
+          debugPrint('AUTH_GATE: Auto-resolving single membership: ${m.businessId}');
         }
         
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -327,17 +287,23 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         });
         return _AppState.loading;
       } else {
-        // CASE C: Multiple memberships -> show selector
         if (kDebugMode) {
-          debugPrint('AUTH_GATE: Multiple memberships (${memberships.length}). Showing selector.');
+          debugPrint('AUTH_GATE: Multiple memberships, showing selector');
         }
         return _AppState.selectBusiness;
       }
     }
 
+    if (kDebugMode) {
+      debugPrint('AUTH_GATE: Ready. Business: ${session.businessId}, Device: $deviceName');
+    }
+
     // Device Setup logic
     if (deviceName == null || deviceName.trim().isEmpty) {
       if (profile != null && profile.displayName.trim().isNotEmpty) {
+        if (kDebugMode) {
+          debugPrint('AUTH_GATE: Auto-setting device name from profile: ${profile.displayName}');
+        }
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           final repo = await ref.read(authRepositoryProvider.future);
           await repo.setLocalDeviceName(profile.displayName);

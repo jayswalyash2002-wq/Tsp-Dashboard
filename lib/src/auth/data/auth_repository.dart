@@ -64,9 +64,11 @@ class AuthRepository {
     required String email,
     required String password,
   }) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    debugPrint('AUTH: LOGIN_ATTEMPT: $normalizedEmail');
     try {
       final cred = await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
+        email: normalizedEmail,
         password: password,
       );
       final user = cred.user;
@@ -98,31 +100,45 @@ class AuthRepository {
     required String name,
     required String phoneNumber,
   }) async {
-    final cred = await _auth.createUserWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-    final user = cred.user;
-    if (user == null) return;
+    final normalizedEmail = email.trim().toLowerCase();
+    debugPrint('AUTH: AUTH_CREATE_START: $normalizedEmail');
+    try {
+      final cred = await _auth.createUserWithEmailAndPassword(
+        email: normalizedEmail,
+        password: password,
+      );
+      final user = cred.user;
+      if (user == null) {
+        debugPrint('AUTH: AUTH_CREATE_FAILED: User is null');
+        return;
+      }
+      debugPrint('AUTH_CREATE_SUCCESS: UID=${user.uid}');
 
-    // 1. Update Firebase Auth Profile (immediate effect)
-    await user.updateDisplayName(name.trim());
-    await user.reload(); // Refresh local user state
+      // 1. Update Firebase Auth Profile (immediate effect)
+      await user.updateDisplayName(name.trim());
+      await user.reload(); // Refresh local user state
 
-    // 2. Save user details to Firestore
-    await _db.collection('users').doc(user.uid).set({
-      'uid': user.uid,
-      'email': email.trim(),
-      'displayName': name.trim(),
-      'phoneNumber': phoneNumber.trim(),
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+      // 2. Save user details to Firestore
+      await _db.collection('users').doc(user.uid).set({
+        'uid': user.uid,
+        'email': normalizedEmail,
+        'displayName': name.trim(),
+        'phoneNumber': phoneNumber.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
-    // 3. Auto-set device name locally
-    await setLocalDeviceName(name.trim());
+      // 3. Auto-set device name locally
+      await setLocalDeviceName(name.trim());
 
-    // 4. Initial heartbeat to register device
-    await registerDeviceSession(deviceName: name.trim());
+      // 4. Initial heartbeat to register device
+      await registerDeviceSession(deviceName: name.trim());
+    } on FirebaseAuthException catch (e) {
+      debugPrint('AUTH: AUTH_CREATE_EXCEPTION: [${e.code}] ${e.message}');
+      rethrow;
+    } catch (e) {
+      debugPrint('AUTH: AUTH_CREATE_ERROR: $e');
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>?> getUserProfile(String uid) async {

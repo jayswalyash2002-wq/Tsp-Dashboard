@@ -1,23 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'permission.dart';
-
-import '../../memberships/data/membership_providers.dart';
+import '../../auth/data/auth_providers.dart';
+import '../../auth/domain/app_user.dart';
 
 /// A service that determines if the current user has specific permissions.
 class PermissionManager {
-  final Set<Permission> _userPermissions;
-  final bool _isLoggedIn;
+  final AppUser? _user;
 
   PermissionManager({
-    required Set<Permission> permissions,
-    required bool isLoggedIn,
-  })  : _userPermissions = permissions,
-        _isLoggedIn = isLoggedIn;
+    required AppUser? user,
+  }) : _user = user;
 
   /// Returns true if the user has the specified permission.
   bool hasPermission(Permission permission) {
-    if (!_isLoggedIn) return false;
-    return _userPermissions.contains(permission);
+    if (_user == null) return false;
+    return _user!.hasPermission(permission);
   }
 
   /// Returns true if the user has AT LEAST ONE of the specified permissions.
@@ -40,16 +37,8 @@ class UnauthorizedException implements Exception {
   String toString() => 'Access Denied: Missing ${permission.name}';
 }
 
-/// Provider that reacts to session changes and updates permissions.
+/// Provider that reacts to profile changes and updates permissions.
 final permissionManagerProvider = Provider<PermissionManager>((ref) {
-  final session = ref.watch(sessionProvider);
-  
-  if (session.businessId == null || session.role == null) {
-    return PermissionManager(permissions: {}, isLoggedIn: false);
-  }
-
-  return PermissionManager(
-    permissions: session.role!.permissions,
-    isLoggedIn: true,
-  );
+  final userProfile = ref.watch(userProfileProvider).value;
+  return PermissionManager(user: userProfile);
 });

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +13,7 @@ import '../../features/rbac/domain/models/business_invite.dart';
 import 'package:tsp_dashboard/src/auth/data/auth_providers.dart';
 import '../../core/utils/password_validator.dart';
 import '../../auth/presentation/widgets/password_requirements_view.dart';
+import '../data/membership_providers.dart';
 
 class JoinBusinessPlaceholderScreen extends ConsumerStatefulWidget {
   const JoinBusinessPlaceholderScreen({super.key});
@@ -98,7 +100,10 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
     try {
       final repo = await ref.read(authRepositoryProvider.future);
       
+      debugPrint('JOIN_FLOW: Mode: ${_isSignInMode ? 'SIGN_IN' : 'SIGN_UP'}, Email: $email');
+      
       if (_isSignInMode) {
+        debugPrint('JOIN_FLOW: Calling signInWithEmailPassword');
         await repo.signInWithEmailPassword(email: email, password: password);
       } else {
         final name = _nameController.text.trim();
@@ -123,20 +128,26 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
           return;
         }
 
+        debugPrint('JOIN_FLOW: Attempting Sign Up for $email');
         await repo.signUpWithEmailPassword(
           email: email, 
           password: password, 
           name: name, 
           phoneNumber: '0000000000', 
         );
+        debugPrint('STEP_1_AUTH_CREATED: New account created for $email');
       }
 
-      // After successful auth, the AuthGate will handle the pending invite if we set it
+      // After successful auth, proceed to claim immediately
       if (_previewInvite != null) {
-        ref.read(pendingInviteProvider.notifier).state = _previewInvite;
+        debugPrint('JOIN_FLOW: Auth successful, triggering claim for ${_previewInvite!.businessId}');
+        await _handleDirectClaim(_previewInvite!.businessId, _previewInvite!.code);
       }
+    } on FirebaseAuthException catch (e) {
+      debugPrint('JOIN_FLOW_AUTH_ERROR: [${e.code}] ${e.message}');
+      _setError(e.message ?? 'Authentication failed');
     } catch (e) {
-      debugPrint('AUTH_CLAIM_ERROR: $e');
+      debugPrint('JOIN_FLOW_ERROR: $e');
       _setError(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isAuthBusy = false);
@@ -159,10 +170,26 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
           _setError(error.replaceAll('Exception: ', ''));
         } else {
           debugPrint('CLAIM_PROCESS_SUCCESS: Joined successfully');
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Joined business successfully!')),
-          );
-          context.go('/dashboard');
+
+          // Wait for memberships to refresh to prevent AuthGate race condition
+          debugPrint('CLAIM_PROCESS: Waiting for memberships to refresh...');
+          int retries = 0;
+          while (mounted && retries < 10) {
+            final mAsync = ref.read(userMembershipsProvider);
+            if (mAsync.hasValue && mAsync.value!.isNotEmpty) {
+              debugPrint('CLAIM_PROCESS: Memberships detected in provider.');
+              break;
+            }
+            await Future.delayed(const Duration(milliseconds: 500));
+            retries++;
+          }
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Joined business successfully!')),
+            );
+            context.go('/dashboard');
+          }
         }
       }
     } catch (e) {

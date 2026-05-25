@@ -80,7 +80,7 @@ class ProfileScreen extends ConsumerWidget {
             const _BusinessStatusCard(),
             const SizedBox(height: 24),
             PermissionGate(
-              permission: Permission.accessSettings,
+              permission: Permission.manageMenu,
               child: Column(
                 children: [
                   _Tile(

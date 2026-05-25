@@ -9,5 +9,8 @@ enum Permission {
   manageBusiness,
   accessSettings,
   viewActivityLog,
-  manageInventory;
+  manageInventory,
+  managePurchases,
+  manageMenu,
+  manageDiscounts;
 }

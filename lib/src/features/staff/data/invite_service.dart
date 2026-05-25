@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../../rbac/domain/models/business_invite.dart';
 
 class InviteService {
@@ -70,6 +71,9 @@ class InviteService {
     required String email,
   }) async {
     try {
+      final normalizedEmail = email.trim().toLowerCase();
+      debugPrint('FIRESTORE: CLAIM_INVITE_START for $normalizedEmail (UID: $uid) in Business: $businessId');
+      
       final invitesRef = _db
           .collection('businesses')
           .doc(businessId)
@@ -82,6 +86,7 @@ class InviteService {
           .get();
 
       if (inviteSnap.docs.isEmpty) {
+        debugPrint('FIRESTORE: CLAIM_INVITE_FAILED - Code $inviteCode not found or already used.');
         throw Exception('Invalid or expired invite code.');
       }
 
@@ -90,10 +95,12 @@ class InviteService {
       final expiresAt = (inviteData['expiresAt'] as Timestamp).toDate();
 
       if (expiresAt.isBefore(DateTime.now())) {
+        debugPrint('FIRESTORE: CLAIM_INVITE_FAILED - Code $inviteCode expired at $expiresAt');
         throw Exception('Invite code has expired.');
       }
 
       final roleStr = inviteData['role'] as String;
+      debugPrint('FIRESTORE: CLAIM_INVITE_VALIDATED - Role: $roleStr');
 
       await _db.runTransaction((transaction) async {
         // 1. Mark invite as used
@@ -110,15 +117,15 @@ class InviteService {
           'uid': uid,
           'businessId': businessId,
           'name': displayName,
-          'email': email,
+          'email': normalizedEmail,
           'role': roleStr.toLowerCase(),
           'status': 'active',
           'joinedAt': FieldValue.serverTimestamp(),
         });
 
         // 2.1 Create Legacy membership document
-        // This ensures the userMembershipsProvider can find it.
-        final membershipRef = _db.collection('memberships').doc();
+        final legacyMembershipId = 'invite_${businessId}_$uid';
+        final membershipRef = _db.collection('memberships').doc(legacyMembershipId);
         transaction.set(membershipRef, {
           'uid': uid,
           'businessId': businessId,
@@ -138,10 +145,11 @@ class InviteService {
           'role': roleStr.toUpperCase(),
         });
       });
+      debugPrint('FIRESTORE: CLAIM_INVITE_SUCCESS for UID: $uid');
     } catch (e, s) {
-      print('FIRESTORE_ERROR: claimInvite failed for business $businessId, code $inviteCode');
-      print('Error: $e');
-      print('Stacktrace: $s');
+      debugPrint('FIRESTORE_ERROR: claimInvite failed for business $businessId, code $inviteCode');
+      debugPrint('Error: $e');
+      debugPrint('Stacktrace: $s');
       rethrow;
     }
   }

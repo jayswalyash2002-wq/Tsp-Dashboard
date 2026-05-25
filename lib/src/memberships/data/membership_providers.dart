@@ -48,10 +48,15 @@ final userMembershipsProvider = Provider<AsyncValue<List<Membership>>>((ref) {
 
   if (legacy.isLoading || newOnes.isLoading) return const AsyncLoading();
   
-  // If one fails, we still try to show the other if possible, 
-  // but if both fail or the error is critical, we report it.
-  if (legacy.hasError && newOnes.hasError) {
-    return AsyncError(legacy.error!, legacy.stackTrace!);
+  if (legacy.hasError || newOnes.hasError) {
+    debugPrint('MEMBERSHIP_ERROR: Legacy Error: ${legacy.error}');
+    debugPrint('MEMBERSHIP_ERROR: NewOnes Error: ${newOnes.error}');
+    // If one fails, we still try to show the other if possible, 
+    // but if both fail or it's a critical error (like permission denied), 
+    // we should ideally report it.
+    if (legacy.hasError && newOnes.hasError) {
+      return AsyncError(legacy.error!, legacy.stackTrace!);
+    }
   }
 
   final legacyList = legacy.value ?? [];
@@ -67,6 +72,7 @@ final userMembershipsProvider = Provider<AsyncValue<List<Membership>>>((ref) {
     }
   }
   
+  debugPrint('MEMBERSHIP_SYNC: Found ${result.length} unique memberships for user');
   return AsyncData(result);
 });
 

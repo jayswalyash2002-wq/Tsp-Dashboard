@@ -1,8 +1,10 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tsp_dashboard/src/core/firebase/firebase_providers.dart';
 import 'package:tsp_dashboard/src/constants/roles.dart';
 import 'package:tsp_dashboard/src/auth/data/auth_providers.dart';
+import '../../../memberships/data/membership_providers.dart';
 import '../data/invite_service.dart';
 import '../../rbac/domain/models/business_invite.dart';
 
@@ -63,14 +65,19 @@ class ClaimInviteNotifier extends AutoDisposeAsyncNotifier<void> {
     required String businessId,
     required String inviteCode,
   }) async {
-    final user = ref.read(authStateChangesProvider).value;
-    if (user == null) throw Exception('User not authenticated');
+    // Use direct Firebase Auth instance to avoid race conditions with Riverpod streams
+    final user = ref.read(firebaseAuthProvider).currentUser;
+    if (user == null) {
+      debugPrint('CLAIM_INVITE_NOTIFIER: Claim failed - No authenticated user found.');
+      throw Exception('User not authenticated');
+    }
 
     final displayName = user.displayName ?? 'New Member';
     final email = user.email ?? '';
 
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
+      debugPrint('STEP_2_CLAIM_INVITE_START: Business: $businessId, Code: $inviteCode');
       await ref.read(inviteServiceProvider).claimInvite(
             businessId: businessId,
             inviteCode: inviteCode,
@@ -79,8 +86,12 @@ class ClaimInviteNotifier extends AutoDisposeAsyncNotifier<void> {
             email: email,
           );
       
-      // Invalidate profile to refresh session
+      debugPrint('STEP_3_MEMBER_CREATED: Claim finished in Firestore');
+      
+      // Invalidate profile and memberships to trigger refresh
+      debugPrint('STEP_4_MEMBERSHIP_REFRESH: Invalidating providers');
       ref.invalidate(userProfileProvider);
+      ref.invalidate(userMembershipsProvider);
     });
   }
 

@@ -38,6 +38,10 @@ enum MembershipRole {
           Permission.accessSettings,
           Permission.manageStaff,
           Permission.manageInventory,
+          Permission.managePurchases,
+          Permission.manageMenu,
+          Permission.manageDiscounts,
+          Permission.viewActivityLog,
         };
       case MembershipRole.cashier:
         return {

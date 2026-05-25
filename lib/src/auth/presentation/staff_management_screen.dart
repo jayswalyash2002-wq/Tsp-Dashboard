@@ -164,6 +164,7 @@ class _ActiveStaffTab extends ConsumerWidget {
               margin: const EdgeInsets.only(bottom: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: ListTile(
+                onTap: () => context.push('/staff/edit', extra: staff),
                 leading: CircleAvatar(
                   backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                   child: Text(staff.displayName.isEmpty ? '?' : staff.displayName[0].toUpperCase()),
@@ -175,6 +176,18 @@ class _ActiveStaffTab extends ConsumerWidget {
                 subtitle: Row(
                   children: [
                     _RoleBadge(role: staff.roleType),
+                    if (staff.permissionOverrides.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Text(
+                          '• ${staff.permissionOverrides.length} overrides',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     if (!staff.isActive)
                       const Padding(
                         padding: EdgeInsets.only(left: 8),
@@ -188,7 +201,7 @@ class _ActiveStaffTab extends ConsumerWidget {
                         onPressed: () => _confirmRemove(context, ref, staff),
                         tooltip: 'Remove Member',
                       )
-                    : null,
+                    : const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
               ),
             );
           },

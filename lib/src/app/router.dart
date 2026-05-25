@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:tsp_dashboard/src/auth/domain/app_user.dart';
 import 'package:tsp_dashboard/src/auth/presentation/auth_gate.dart';
 import 'package:tsp_dashboard/src/auth/presentation/login_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/otp_verification_screen.dart';
@@ -22,6 +23,7 @@ import 'package:tsp_dashboard/src/business/presentation/business_setup_screen.da
 import 'package:tsp_dashboard/src/auth/presentation/staff_management_screen.dart';
 import 'package:tsp_dashboard/src/inventory/presentation/inventory_screen.dart';
 import 'package:tsp_dashboard/src/features/staff/presentation/add_staff_screen.dart';
+import 'package:tsp_dashboard/src/features/staff/presentation/edit_staff_screen.dart';
 import 'package:tsp_dashboard/src/features/staff/presentation/invite_code_screen.dart';
 import 'package:tsp_dashboard/src/features/staff/presentation/pending_invites_screen.dart';
 import 'package:tsp_dashboard/src/activity_log/presentation/screens/activity_log_screen.dart';
@@ -62,7 +64,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       final routePermissions = {
         '/sales-reports': Permission.viewReports,
         '/expense-reports': Permission.viewReports,
-        '/edit-menu': Permission.manageBusiness,
+        '/edit-menu': Permission.manageMenu,
         '/business-setup': Permission.manageBusiness,
         '/expenses': Permission.manageExpenses,
         '/staff': Permission.manageStaff,
@@ -135,6 +137,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'pending',
                 builder: (context, state) => const PendingInvitesScreen(),
+              ),
+              GoRoute(
+                path: 'edit',
+                builder: (context, state) {
+                  final staff = state.extra as AppUser;
+                  return EditStaffScreen(staff: staff);
+                },
               ),
               GoRoute(
                 path: 'invite-code',
