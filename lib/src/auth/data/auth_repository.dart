@@ -101,7 +101,7 @@ class AuthRepository {
     required String phoneNumber,
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
-    debugPrint('AUTH: AUTH_CREATE_START: $normalizedEmail');
+    debugPrint('AUTH: AUTH_CREATE_START for $normalizedEmail');
     try {
       final cred = await _auth.createUserWithEmailAndPassword(
         email: normalizedEmail,
@@ -109,16 +109,18 @@ class AuthRepository {
       );
       final user = cred.user;
       if (user == null) {
-        debugPrint('AUTH: AUTH_CREATE_FAILED: User is null');
-        return;
+        debugPrint('AUTH: AUTH_CREATE_FAILED: Firebase user is null');
+        throw Exception('User creation failed');
       }
-      debugPrint('AUTH_CREATE_SUCCESS: UID=${user.uid}');
+      debugPrint('AUTH: AUTH_CREATE_SUCCESS: UID=${user.uid}');
 
       // 1. Update Firebase Auth Profile (immediate effect)
+      debugPrint('AUTH: Updating display name to "$name"');
       await user.updateDisplayName(name.trim());
       await user.reload(); // Refresh local user state
 
       // 2. Save user details to Firestore
+      debugPrint('AUTH: Creating user document in Firestore for ${user.uid}');
       await _db.collection('users').doc(user.uid).set({
         'uid': user.uid,
         'email': normalizedEmail,
@@ -126,17 +128,20 @@ class AuthRepository {
         'phoneNumber': phoneNumber.trim(),
         'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+      debugPrint('AUTH: User document created successfully.');
 
       // 3. Auto-set device name locally
       await setLocalDeviceName(name.trim());
 
       // 4. Initial heartbeat to register device
+      debugPrint('AUTH: Registering device session...');
       await registerDeviceSession(deviceName: name.trim());
+      debugPrint('AUTH: Device session registered.');
     } on FirebaseAuthException catch (e) {
-      debugPrint('AUTH: AUTH_CREATE_EXCEPTION: [${e.code}] ${e.message}');
+      debugPrint('AUTH: AUTH_CREATE_FIREBASE_EXCEPTION: [${e.code}] ${e.message}');
       rethrow;
     } catch (e) {
-      debugPrint('AUTH: AUTH_CREATE_ERROR: $e');
+      debugPrint('AUTH: AUTH_CREATE_GENERAL_ERROR: $e');
       rethrow;
     }
   }

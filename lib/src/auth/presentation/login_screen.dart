@@ -8,6 +8,8 @@ import '../data/auth_providers.dart';
 import '../../activity_log/presentation/providers/activity_log_providers.dart';
 import '../../activity_log/domain/entities/activity_log_enums.dart';
 
+import '../../core/widgets/app_password_field.dart';
+
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -127,15 +129,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              TextField(
+              AppPasswordField(
                 controller: _password,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                ),
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _signIn(),
               ),
               Align(
                 alignment: Alignment.centerRight,

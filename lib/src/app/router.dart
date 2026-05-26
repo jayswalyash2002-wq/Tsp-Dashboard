@@ -105,7 +105,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'join',
             name: 'join',
-            builder: (context, state) => const JoinBusinessPlaceholderScreen(),
+            builder: (context, state) {
+              final code = state.uri.queryParameters['code'];
+              return JoinBusinessPlaceholderScreen(initialCode: code);
+            },
           ),
           GoRoute(
             path: 'otp',

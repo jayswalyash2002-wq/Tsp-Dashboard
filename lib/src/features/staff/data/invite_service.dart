@@ -103,6 +103,16 @@ class InviteService {
       debugPrint('FIRESTORE: CLAIM_INVITE_VALIDATED - Role: $roleStr');
 
       await _db.runTransaction((transaction) async {
+        debugPrint('FIRESTORE: Starting Transaction...');
+        
+        // 0. Verify user document exists (created during sign up)
+        final userRef = _db.collection('users').doc(uid);
+        final userSnap = await transaction.get(userRef);
+        if (!userSnap.exists) {
+          debugPrint('FIRESTORE: ERROR - User profile $uid does not exist in transaction.');
+          throw Exception('User profile not found. Please try again.');
+        }
+
         // 1. Mark invite as used
         transaction.update(inviteDoc.reference, {'isUsed': true});
 
@@ -119,7 +129,8 @@ class InviteService {
           'name': displayName,
           'email': normalizedEmail,
           'role': roleStr.toLowerCase(),
-          'status': 'active',
+          'status': 'accepted',
+          'isActive': true,
           'joinedAt': FieldValue.serverTimestamp(),
         });
 
@@ -131,7 +142,8 @@ class InviteService {
           'businessId': businessId,
           'branchId': null,
           'role': roleStr.toLowerCase(),
-          'status': 'active',
+          'status': 'accepted',
+          'isActive': true,
           'createdAt': FieldValue.serverTimestamp(),
           'createdBy': 'invite_system',
           'updatedAt': FieldValue.serverTimestamp(),
@@ -139,13 +151,13 @@ class InviteService {
         });
 
         // 3. Update user profile with businessId and role (Legacy support)
-        final userRef = _db.collection('users').doc(uid);
         transaction.update(userRef, {
           'businessId': businessId,
           'role': roleStr.toUpperCase(),
         });
+        debugPrint('FIRESTORE: Transaction operations added.');
       });
-      debugPrint('FIRESTORE: CLAIM_INVITE_SUCCESS for UID: $uid');
+      debugPrint('FIRESTORE: TRANSACTION_COMMITTED successfully for UID: $uid');
     } catch (e, s) {
       debugPrint('FIRESTORE_ERROR: claimInvite failed for business $businessId, code $inviteCode');
       debugPrint('Error: $e');

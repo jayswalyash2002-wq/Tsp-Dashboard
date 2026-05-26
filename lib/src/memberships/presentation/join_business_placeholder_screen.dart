@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -12,11 +13,13 @@ import '../../business/domain/business.dart';
 import '../../features/rbac/domain/models/business_invite.dart';
 import 'package:tsp_dashboard/src/auth/data/auth_providers.dart';
 import '../../core/utils/password_validator.dart';
+import '../../core/widgets/app_password_field.dart';
 import '../../auth/presentation/widgets/password_requirements_view.dart';
 import '../data/membership_providers.dart';
 
 class JoinBusinessPlaceholderScreen extends ConsumerStatefulWidget {
-  const JoinBusinessPlaceholderScreen({super.key});
+  final String? initialCode;
+  const JoinBusinessPlaceholderScreen({super.key, this.initialCode});
 
   @override
   ConsumerState<JoinBusinessPlaceholderScreen> createState() => _JoinBusinessPlaceholderScreenState();
@@ -39,6 +42,18 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
   Business? _previewBusiness;
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.initialCode != null) {
+      _inviteController.text = widget.initialCode!;
+      // Delay to ensure provider is ready
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _validateInvite(widget.initialCode!);
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _inviteController.dispose();
     _emailController.dispose();
@@ -58,6 +73,7 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
       _error = null;
       _previewInvite = null;
       _previewBusiness = null;
+      _nameController.clear();
     });
 
     try {
@@ -76,6 +92,12 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
       setState(() {
         _previewInvite = invite;
         _previewBusiness = business;
+        // Auto-fill name from invite if available
+        if (invite.staffName.isNotEmpty) {
+          _nameController.text = invite.staffName;
+        }
+        // Default to Sign Up mode for new invited users
+        _isSignInMode = false;
       });
     } catch (e) {
       debugPrint('INVITE_VALIDATION_ERROR: $e');
@@ -96,52 +118,66 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
     }
 
     setState(() => _isAuthBusy = true);
+    debugPrint('JOIN_FLOW: START _handleAuthAndClaim for $email');
 
     try {
-      final repo = await ref.read(authRepositoryProvider.future);
+      final repo = await ref.read(authRepositoryProvider.future).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception('Auth service timeout. Please check your connection.'),
+      );
       
-      debugPrint('JOIN_FLOW: Mode: ${_isSignInMode ? 'SIGN_IN' : 'SIGN_UP'}, Email: $email');
+      debugPrint('JOIN_FLOW: Mode: ${_isSignInMode ? 'SIGN_IN' : 'SIGN_UP'}');
       
       if (_isSignInMode) {
-        debugPrint('JOIN_FLOW: Calling signInWithEmailPassword');
-        await repo.signInWithEmailPassword(email: email, password: password);
+        debugPrint('JOIN_FLOW: Calling signInWithEmailPassword...');
+        await repo.signInWithEmailPassword(email: email, password: password).timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => throw Exception('Sign in timed out.'),
+        );
+        debugPrint('JOIN_FLOW: Sign In Success');
       } else {
         final name = _nameController.text.trim();
         final confirmPassword = _confirmPasswordController.text;
         
         if (name.isEmpty) {
           _setError('Please enter your full name.');
-          setState(() => _isAuthBusy = false);
           return;
         }
 
         final passwordResult = PasswordValidator.validate(password);
         if (!passwordResult.isValid) {
           _setError('Password does not meet requirements.');
-          setState(() => _isAuthBusy = false);
           return;
         }
         
         if (password != confirmPassword) {
           _setError('Passwords do not match.');
-          setState(() => _isAuthBusy = false);
           return;
         }
 
-        debugPrint('JOIN_FLOW: Attempting Sign Up for $email');
+        debugPrint('JOIN_FLOW: Calling signUpWithEmailPassword for $email');
         await repo.signUpWithEmailPassword(
           email: email, 
           password: password, 
           name: name, 
           phoneNumber: '0000000000', 
+        ).timeout(
+          const Duration(seconds: 20),
+          onTimeout: () => throw Exception('Sign up timed out. Please check your connection.'),
         );
-        debugPrint('STEP_1_AUTH_CREATED: New account created for $email');
+        debugPrint('JOIN_FLOW: STEP_1_AUTH_CREATED: Account created for $email');
       }
 
       // After successful auth, proceed to claim immediately
       if (_previewInvite != null) {
-        debugPrint('JOIN_FLOW: Auth successful, triggering claim for ${_previewInvite!.businessId}');
-        await _handleDirectClaim(_previewInvite!.businessId, _previewInvite!.code);
+        debugPrint('JOIN_FLOW: Proceeding to claim for Business: ${_previewInvite!.businessId}');
+        final success = await _handleDirectClaim(_previewInvite!.businessId, _previewInvite!.code);
+        if (!success && mounted) {
+           debugPrint('JOIN_FLOW: Claim sub-process reported failure.');
+        }
+      } else {
+        debugPrint('JOIN_FLOW: WARNING: No invite preview found after auth.');
+        _setError('Invite session expired. Please re-enter your code.');
       }
     } on FirebaseAuthException catch (e) {
       debugPrint('JOIN_FLOW_AUTH_ERROR: [${e.code}] ${e.message}');
@@ -150,53 +186,76 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
       debugPrint('JOIN_FLOW_ERROR: $e');
       _setError(e.toString().replaceAll('Exception: ', ''));
     } finally {
+      debugPrint('JOIN_FLOW: FINISH _handleAuthAndClaim (Busy=false)');
       if (mounted) setState(() => _isAuthBusy = false);
     }
   }
 
-  Future<void> _handleDirectClaim(String businessId, String inviteCode) async {
+  Future<bool> _handleDirectClaim(String businessId, String inviteCode) async {
     _setError(null);
+    debugPrint('CLAIM_PROCESS: START _handleDirectClaim');
     try {
-      debugPrint('CLAIM_PROCESS: Starting claim for Business: $businessId, Code: $inviteCode');
+      debugPrint('CLAIM_PROCESS: Calling ClaimInviteNotifier.claim...');
       await ref.read(claimInviteProvider.notifier).claim(
         businessId: businessId,
         inviteCode: inviteCode,
+      ).timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => throw Exception('Claim process timed out.'),
       );
       
-      if (mounted) {
-        final state = ref.read(claimInviteProvider);
-        if (state.hasError) {
-          final error = state.error.toString();
-          _setError(error.replaceAll('Exception: ', ''));
-        } else {
-          debugPrint('CLAIM_PROCESS_SUCCESS: Joined successfully');
+      if (!mounted) return false;
 
-          // Wait for memberships to refresh to prevent AuthGate race condition
-          debugPrint('CLAIM_PROCESS: Waiting for memberships to refresh...');
-          int retries = 0;
-          while (mounted && retries < 10) {
-            final mAsync = ref.read(userMembershipsProvider);
-            if (mAsync.hasValue && mAsync.value!.isNotEmpty) {
-              debugPrint('CLAIM_PROCESS: Memberships detected in provider.');
-              break;
-            }
-            await Future.delayed(const Duration(milliseconds: 500));
-            retries++;
-          }
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Joined business successfully!')),
-            );
-            context.go('/dashboard');
-          }
-        }
+      final state = ref.read(claimInviteProvider);
+      if (state.hasError) {
+        final error = state.error.toString();
+        debugPrint('CLAIM_PROCESS: Provider reported error: $error');
+        _setError(error.replaceAll('Exception: ', ''));
+        return false;
       }
+
+      debugPrint('CLAIM_PROCESS_SUCCESS: Joined successfully. Waiting for membership sync...');
+
+      // Wait for memberships to refresh to prevent AuthGate race condition
+      int retries = 0;
+      bool synced = false;
+      while (mounted && retries < 12) {
+        final mAsync = ref.read(userMembershipsProvider);
+        if (mAsync.hasValue && mAsync.value!.isNotEmpty) {
+          debugPrint('CLAIM_PROCESS: Memberships synced successfully (found ${mAsync.value!.length} items).');
+          synced = true;
+          break;
+        }
+        debugPrint('CLAIM_PROCESS: Syncing... (attempt ${retries + 1}/12)');
+        await Future.delayed(const Duration(milliseconds: 500));
+        retries++;
+      }
+
+      if (!synced) {
+        debugPrint('CLAIM_PROCESS: Sync warning: Memberships not found in provider after 6s.');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Joined business successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        debugPrint('CLAIM_PROCESS: NAVIGATING TO DASHBOARD');
+        context.go('/dashboard');
+        return true;
+      }
+      return false;
     } catch (e) {
       debugPrint('CLAIM_PROCESS_CATCH: $e');
       if (mounted) {
         _setError(e.toString().replaceAll('Exception: ', ''));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to join: $e'), backgroundColor: Colors.red),
+        );
       }
+      return false;
     }
   }
 
@@ -359,10 +418,14 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
                 if (!_isSignInMode) ...[
                   TextField(
                     controller: _nameController,
+                    readOnly: _previewInvite?.staffName.isNotEmpty ?? false,
                     decoration: InputDecoration(
                       labelText: 'Full Name',
                       prefixIcon: const Icon(Icons.person_outline),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                      helperText: (_previewInvite?.staffName.isNotEmpty ?? false)
+                          ? 'Name provided by your business'
+                          : null,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -379,29 +442,18 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
                 ),
                 const SizedBox(height: 16),
                 
-                TextField(
+                AppPasswordField(
                   controller: _passwordController,
-                  obscureText: true,
                   onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
                 ),
                 const SizedBox(height: 16),
 
                 if (!_isSignInMode) ...[
                   PasswordRequirementsView(password: _passwordController.text),
                   const SizedBox(height: 16),
-                  TextField(
+                  AppPasswordField(
                     controller: _confirmPasswordController,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: 'Confirm Password',
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
+                    labelText: 'Confirm Password',
                   ),
                   const SizedBox(height: 24),
                 ],
@@ -455,6 +507,8 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
                   _previewBusiness = null;
                   _previewInvite = null;
                   _error = null;
+                  _nameController.clear();
+                  _isSignInMode = true;
                 }),
                 child: const Text('Use different code'),
               ),

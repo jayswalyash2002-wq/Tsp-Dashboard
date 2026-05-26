@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../data/auth_providers.dart';
+import '../../core/widgets/app_password_field.dart';
 
 class RegisterDetailsScreen extends ConsumerStatefulWidget {
   const RegisterDetailsScreen({
@@ -120,14 +121,9 @@ class _RegisterDetailsScreenState extends ConsumerState<RegisterDetailsScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            TextField(
+            AppPasswordField(
               controller: _passwordController,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: 'Password',
-                prefixIcon: const Icon(Icons.lock_outline),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-              ),
+              onFieldSubmitted: (_) => _register(),
             ),
             const Spacer(),
             FilledButton(

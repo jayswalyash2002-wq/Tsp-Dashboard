@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../data/auth_providers.dart';
 import '../../core/firebase/firebase_providers.dart';
 import '../../core/utils/password_validator.dart';
+import '../../core/widgets/app_password_field.dart';
 import 'widgets/password_requirements_view.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
@@ -25,7 +26,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _busy = false;
-  bool _obscurePassword = true;
   bool _showPasswordRequirements = false;
   
   String? _initialEmail;
@@ -265,18 +265,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              TextFormField(
+              AppPasswordField(
                 controller: _passwordController,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                  ),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                ),
                 validator: PasswordValidator.getError,
               ),
               const SizedBox(height: 16),
@@ -285,14 +275,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 forceShow: _showPasswordRequirements,
               ),
               const SizedBox(height: 16),
-              TextFormField(
+              AppPasswordField(
                 controller: _confirmPasswordController,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  labelText: 'Confirm Password',
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                ),
+                labelText: 'Confirm Password',
                 validator: (v) {
                   if (v != _passwordController.text) {
                     return 'Passwords do not match';

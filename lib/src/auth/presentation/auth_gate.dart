@@ -30,6 +30,8 @@ enum _AppState {
   onboarding, // Generic onboarding state
   selectBusiness,
   deviceSetup,
+  pendingApproval,
+  accessDenied,
   ready,
   error,
 }
@@ -46,6 +48,25 @@ class AuthGate extends ConsumerStatefulWidget {
 class _AuthGateState extends ConsumerState<AuthGate> {
   String? _sessionUid;
   String? _sessionDeviceName;
+  DateTime? _loadingStartTime;
+  bool _showStuckWarning = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadingStartTime = DateTime.now();
+    _startStuckChecker();
+  }
+
+  void _startStuckChecker() {
+    Future.delayed(const Duration(seconds: 15), () {
+      if (mounted && _loadingStartTime != null) {
+        setState(() {
+          _showStuckWarning = true;
+        });
+      }
+    });
+  }
 
   void _ensureDeviceSession({
     required AuthRepository repo,
@@ -91,13 +112,17 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       currentPath: currentPath,
     );
 
+    if (state != _AppState.loading && _loadingStartTime != null) {
+      _loadingStartTime = null; // Resolution reached
+    }
+
     if (kDebugMode && session.businessId != null) {
       debugPrint('AUTH_GATE: Active Session detected for Business: ${session.businessId}');
     }
 
     switch (state) {
       case _AppState.loading:
-        return const _BlockingLoader();
+        return _BlockingLoader(showWarning: _showStuckWarning);
       case _AppState.intentSelection:
         return const IntentSelectionScreen();
       case _AppState.login:
@@ -106,8 +131,25 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       case _AppState.onboarding:
         // Ready to show the child (setup, join, etc)
         return widget.child ?? const IntentSelectionScreen();
+      case _AppState.pendingApproval:
+        return const _StatusScreen(
+          icon: Icons.hourglass_empty_rounded,
+          title: 'Membership Pending',
+          message: 'Your membership is awaiting approval from the business owner.',
+        );
+      case _AppState.accessDenied:
+        return const _StatusScreen(
+          icon: Icons.block_rounded,
+          title: 'Access Denied',
+          message: 'Your membership has been revoked or suspended. Please contact your administrator.',
+          isError: true,
+        );
       case _AppState.selectBusiness:
-        return BusinessSelectorScreen(memberships: membershipsAsync.value!);
+        // Only show accepted memberships in selector
+        final activeMemberships = membershipsAsync.value!
+            .where((m) => m.status == MembershipStatus.accepted)
+            .toList();
+        return BusinessSelectorScreen(memberships: activeMemberships);
       case _AppState.deviceSetup:
         return const DeviceNameScreen();
       case _AppState.ready:
@@ -140,7 +182,12 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   }) {
     if (authState.isLoading || membershipsAsync.isLoading || profileAsync.isLoading) {
       if (kDebugMode) {
-        debugPrint('AUTH_GATE: Loading... auth=${authState.isLoading}, memberships=${membershipsAsync.isLoading}, profile=${profileAsync.isLoading}');
+        final List<String> waitingOn = [];
+        if (authState.isLoading) waitingOn.add('Auth');
+        if (membershipsAsync.isLoading) waitingOn.add('Memberships');
+        if (profileAsync.isLoading) waitingOn.add('Profile');
+        
+        debugPrint('AUTH_GATE: Loading state active. Waiting on: ${waitingOn.join(', ')}');
       }
       return _AppState.loading;
     }
@@ -187,18 +234,30 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     final memberships = membershipsAsync.value ?? [];
     final profile = profileAsync.value;
     
+    final activeMemberships = memberships.where((m) => 
+      m.status == MembershipStatus.accepted).toList();
+    final pendingMemberships = memberships.where((m) => 
+      m.status == MembershipStatus.pending).toList();
+    final deniedMemberships = memberships.where((m) => 
+      m.status == MembershipStatus.revoked || 
+      m.status == MembershipStatus.suspended || 
+      m.status == MembershipStatus.removed).toList();
+
     if (kDebugMode) {
-      debugPrint('AUTH_GATE: Memberships: ${memberships.length}, Profile BusinessId: ${profile?.businessId}');
+      debugPrint('AUTH_GATE: Memberships: Total=${memberships.length}, Active=${activeMemberships.length}, Pending=${pendingMemberships.length}, Denied=${deniedMemberships.length}');
+      if (profile?.businessId != null) {
+        debugPrint('AUTH_GATE: Profile BusinessId: ${profile?.businessId}');
+      }
     }
 
     // Auth Resolution Flow
     
-    // CASE A — empty result (no active memberships)
+    // CASE A — empty result (no memberships at all)
     if (memberships.isEmpty) {
       // If we are still loading profile or memberships, wait.
-      if (profile != null && profile.businessId != null) {
+      if (profile != null && profile.businessId != null && !_showStuckWarning) {
         if (kDebugMode) {
-          debugPrint('AUTH_GATE: Profile has businessId but memberships empty. Waiting...');
+          debugPrint('AUTH_GATE: Profile has businessId (${profile.businessId}) but no membership doc found yet. Waiting...');
         }
         return _AppState.loading;
       }
@@ -208,7 +267,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       final onboardingRoutes = ['/business-setup', '/auth/join', '/auth/signup', '/auth/otp', '/onboarding'];
       final isProtected = !onboardingRoutes.contains(currentPath) && currentPath != '/';
       
-      if (isProtected) {
+      if (isProtected && !_showStuckWarning) {
         if (kDebugMode) {
           debugPrint('AUTH_GATE: Protected route $currentPath with no memberships. Waiting for sync...');
         }
@@ -248,14 +307,41 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       return _AppState.intentSelection;
     }
 
-    // CASE B & C: Resolution
+    // CASE B: Handling Membership Statuses
+    if (activeMemberships.isEmpty) {
+      if (pendingMemberships.isNotEmpty) {
+        return _AppState.pendingApproval;
+      }
+      if (deniedMemberships.isNotEmpty) {
+        return _AppState.accessDenied;
+      }
+      
+      // If we are here, it means memberships list has items but none are active, pending, or denied?
+      // Should not happen with current enums, but let's be safe.
+      debugPrint('AUTH_GATE: Warning - User has memberships but none match active/pending/denied filters.');
+      return _AppState.intentSelection;
+    }
+
+    // CASE C: Resolution for Active Memberships
+    if (session.businessId != null) {
+      final currentMembership = activeMemberships.where((m) => m.businessId == session.businessId).firstOrNull;
+      if (currentMembership == null) {
+        // Active session is for a business where membership is no longer active
+        debugPrint('AUTH_GATE: Session exists for ${session.businessId} but membership is no longer accepted.');
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(sessionProvider.notifier).clear();
+        });
+        return _AppState.loading;
+      }
+    }
+
     if (session.businessId == null) {
       // RESTORATION HINT: Use businessId from user profile if available
       if (profile?.businessId != null) {
-        final matching = memberships.where((m) => m.businessId == profile!.businessId).firstOrNull;
+        final matching = activeMemberships.where((m) => m.businessId == profile!.businessId).firstOrNull;
         if (matching != null) {
           if (kDebugMode) {
-            debugPrint('AUTH_GATE: Restoring session: ${matching.businessId}');
+            debugPrint('AUTH_GATE: Restoring session from profile: ${matching.businessId}');
           }
           WidgetsBinding.instance.addPostFrameCallback((_) {
             ref.read(sessionProvider.notifier).setSession(
@@ -270,10 +356,10 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         }
       }
 
-      if (memberships.length == 1) {
-        final m = memberships.first;
+      if (activeMemberships.length == 1) {
+        final m = activeMemberships.first;
         if (kDebugMode) {
-          debugPrint('AUTH_GATE: Auto-resolving single membership: ${m.businessId}');
+          debugPrint('AUTH_GATE: Auto-resolving single active membership: ${m.businessId}');
         }
         
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -288,7 +374,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         return _AppState.loading;
       } else {
         if (kDebugMode) {
-          debugPrint('AUTH_GATE: Multiple memberships, showing selector');
+          debugPrint('AUTH_GATE: Multiple active memberships (${activeMemberships.length}), showing selector');
         }
         return _AppState.selectBusiness;
       }
@@ -319,12 +405,44 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 }
 
 class _BlockingLoader extends StatelessWidget {
-  const _BlockingLoader();
+  const _BlockingLoader({this.showWarning = false});
+  final bool showWarning;
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(),
+            if (showWarning) ...[
+              const SizedBox(height: 24),
+              const Text(
+                'Taking longer than usual...',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 40),
+                child: Text(
+                  'We are having trouble connecting to the server. Please check your internet connection or try restarting the app.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+              const SizedBox(height: 24),
+              TextButton(
+                onPressed: () {
+                  // In a real app, we might trigger a global refresh or sign out
+                  // For now, just a hint to the user.
+                },
+                child: const Text('Still waiting?'),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -340,9 +458,71 @@ class _BlockingError extends StatelessWidget {
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(
-            message,
-            textAlign: TextAlign.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.red, size: 48),
+              const SizedBox(height: 16),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: () => FirebaseAuth.instance.signOut(),
+                child: const Text('Sign Out'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusScreen extends StatelessWidget {
+  const _StatusScreen({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.isError = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 64, color: isError ? Colors.red : Colors.blue),
+              const SizedBox(height: 24),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+              const SizedBox(height: 40),
+              OutlinedButton(
+                onPressed: () => FirebaseAuth.instance.signOut(),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(200, 50),
+                ),
+                child: const Text('Sign Out'),
+              ),
+            ],
           ),
         ),
       ),

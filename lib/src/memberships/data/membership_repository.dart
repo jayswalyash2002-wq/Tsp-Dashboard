@@ -10,7 +10,7 @@ class MembershipRepository {
     final snapshot = await _db
         .collection('memberships')
         .where('uid', isEqualTo: uid)
-        .where('status', isEqualTo: 'active')
+        .where('status', isEqualTo: 'accepted')
         .get();
 
     return snapshot.docs
@@ -29,7 +29,7 @@ class MembershipRepository {
       'uid': uid,
       'businessId': businessId,
       'role': MembershipRole.owner.name,
-      'status': MembershipStatus.active.name,
+      'status': MembershipStatus.accepted.name,
       'createdAt': FieldValue.serverTimestamp(),
       'createdBy': createdBy,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -51,7 +51,7 @@ class MembershipRepository {
       'businessId': businessId,
       'branchId': branchId,
       'role': role.name,
-      'status': MembershipStatus.active.name,
+      'status': MembershipStatus.accepted.name,
       'createdAt': FieldValue.serverTimestamp(),
       'createdBy': createdBy,
       'updatedAt': FieldValue.serverTimestamp(),

@@ -75,17 +75,19 @@ final userProfileProvider = StreamProvider<AppUser?>((ref) {
     
     Map<String, dynamic>? userData;
     Map<String, dynamic>? memberData;
+    bool userLoaded = false;
     bool memberLoaded = false;
 
     void emit() {
-      if (userData == null) return;
+      if (!userLoaded) return;
       
+      final effectiveUserData = userData ?? {};
       final effectiveMemberData = memberData ?? {};
       
       // FALLBACK LOGIC: 
-      // If member document doesn't have a role, look for it in userData or the session state.
+      // If member document doesn't have a role, look for it in effectiveUserData or the session state.
       final String? roleFromMember = effectiveMemberData['role'] as String?;
-      final String? roleFromUser = userData!['role'] as String?;
+      final String? roleFromUser = effectiveUserData['role'] as String?;
       final String? sessionRole = ref.read(sessionProvider).role?.name;
       
       final effectiveRole = roleFromMember ?? roleFromUser ?? sessionRole;
@@ -95,27 +97,29 @@ final userProfileProvider = StreamProvider<AppUser?>((ref) {
       }
 
       controller.add(AppUser.fromMap({
-        ...userData!,
+        ...effectiveUserData,
         'uid': user.uid,
         if (effectiveRole != null) 'role': effectiveRole,
         if (effectiveMemberData.containsKey('permissions')) 'permissions': effectiveMemberData['permissions'],
         'businessId': businessId,
-        'isActive': effectiveMemberData['status'] == 'active' || 
-                   (!memberLoaded && (userData!['isActive'] ?? true)) || 
-                   (memberLoaded && effectiveMemberData.isEmpty && (userData!['isActive'] ?? true)),
+        'isActive': effectiveMemberData['status'] == 'accepted' || 
+                   effectiveMemberData['status'] == 'active' ||
+                   (!memberLoaded && (effectiveUserData['isActive'] ?? true)) || 
+                   (memberLoaded && effectiveMemberData.isEmpty && (effectiveUserData['isActive'] ?? true)),
       }));
     }
 
     final userSub = db.collection('users').doc(user.uid).snapshots().listen((snap) {
       userData = snap.data();
+      userLoaded = true;
       emit();
-    });
+    }, onError: (e) => controller.addError(e));
 
     final memberSub = db.collection('businesses').doc(businessId).collection('members').doc(user.uid).snapshots().listen((snap) {
       memberData = snap.data();
       memberLoaded = true;
       emit();
-    });
+    }, onError: (e) => controller.addError(e));
 
     ref.onDispose(() {
       userSub.cancel();

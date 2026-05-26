@@ -27,7 +27,7 @@ class StaffRepository {
           'uid': data['uid'] ?? doc.id,
           'displayName': data['name'] ?? '',
           'role': data['role'] ?? 'staff',
-          'isActive': data['status'] == 'active',
+          'isActive': data['status'] == 'active' || data['status'] == 'accepted',
           'businessId': _businessId,
         });
       }).toList();

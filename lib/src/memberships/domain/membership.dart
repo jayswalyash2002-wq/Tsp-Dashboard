@@ -59,15 +59,22 @@ enum MembershipRole {
 }
 
 enum MembershipStatus {
-  active,
+  pending,
+  accepted,
+  revoked,
   suspended,
-  invited,
-  revoked;
+  removed;
 
   static MembershipStatus fromString(String value) {
+    final normalized = value.trim().toLowerCase();
     return MembershipStatus.values.firstWhere(
-      (e) => e.name == value.toLowerCase(),
-      orElse: () => MembershipStatus.revoked,
+      (e) => e.name == normalized,
+      orElse: () {
+        // Fallback mappings
+        if (normalized == 'invited') return MembershipStatus.pending;
+        if (normalized == 'active') return MembershipStatus.accepted;
+        return MembershipStatus.removed;
+      },
     );
   }
 }

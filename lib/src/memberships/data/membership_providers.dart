@@ -13,15 +13,18 @@ final legacyMembershipsProvider = StreamProvider<List<Membership>>((ref) {
   final user = ref.watch(authStateChangesProvider).value;
   if (user == null) return Stream.value([]);
   
+  debugPrint('MEMBERSHIP_FETCH: Fetching legacy for ${user.uid}');
   final db = ref.watch(firestoreProvider);
   return db
       .collection('memberships')
       .where('uid', isEqualTo: user.uid)
-      .where('status', isEqualTo: 'active')
       .snapshots()
-      .map((snapshot) => snapshot.docs
+      .map((snapshot) {
+        debugPrint('MEMBERSHIP_FETCH: Legacy docs for ${user.uid}: ${snapshot.docs.length}');
+        return snapshot.docs
           .map((doc) => Membership.fromMap(doc.data(), doc.id))
-          .toList());
+          .toList();
+      });
 });
 
 /// Internal provider for new multi-tenant membership structure
@@ -29,15 +32,18 @@ final newMembershipsProvider = StreamProvider<List<Membership>>((ref) {
   final user = ref.watch(authStateChangesProvider).value;
   if (user == null) return Stream.value([]);
   
+  debugPrint('MEMBERSHIP_FETCH: Fetching collectionGroup members for ${user.uid}');
   final db = ref.watch(firestoreProvider);
   return db
       .collectionGroup('members')
       .where('uid', isEqualTo: user.uid)
-      .where('status', isEqualTo: 'active')
       .snapshots()
-      .map((snapshot) => snapshot.docs
+      .map((snapshot) {
+        debugPrint('MEMBERSHIP_FETCH: collectionGroup docs for ${user.uid}: ${snapshot.docs.length}');
+        return snapshot.docs
           .map((doc) => Membership.fromMap(doc.data(), doc.id))
-          .toList());
+          .toList();
+      });
 });
 
 /// Unified provider that combines both legacy and new membership structures.
