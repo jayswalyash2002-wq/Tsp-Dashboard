@@ -26,11 +26,11 @@ class ChartContainer extends StatelessWidget {
         color: isDark ? theme.cardColor : Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: theme.dividerColor.withOpacity(isDark ? 0.05 : 0.08),
+          color: theme.dividerColor.withValues(alpha: isDark ? 0.05 : 0.08),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),

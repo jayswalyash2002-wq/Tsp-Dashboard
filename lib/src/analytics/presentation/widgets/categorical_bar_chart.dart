@@ -65,7 +65,7 @@ class CategoricalBarChart extends StatelessWidget {
                       height: 5,
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: theme.dividerColor.withOpacity(0.05),
+                        color: theme.dividerColor.withValues(alpha: 0.05),
                       ),
                     ),
                     FractionallySizedBox(

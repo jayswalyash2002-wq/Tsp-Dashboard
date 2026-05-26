@@ -122,7 +122,7 @@ class _EditStaffScreenState extends ConsumerState<EditStaffScreen> {
                   Text(widget.staff.email, style: TextStyle(color: cs.onSurfaceVariant)),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<RoleType>(
-                    value: _selectedRole,
+                    initialValue: _selectedRole,
                     decoration: const InputDecoration(labelText: 'Base Role'),
                     items: RoleType.values.map((role) {
                       // Only owners can promote others to owner

@@ -12,9 +12,6 @@ import '../domain/fund_movement.dart';
 
 import '../../activity_log/presentation/providers/activity_log_providers.dart';
 import '../../activity_log/domain/entities/activity_log_enums.dart';
-import '../../memberships/data/membership_providers.dart';
-import '../../core/device/device_providers.dart';
-
 class ExpensesScreen extends ConsumerWidget {
   const ExpensesScreen({super.key});
 

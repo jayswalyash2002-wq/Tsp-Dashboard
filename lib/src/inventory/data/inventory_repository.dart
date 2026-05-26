@@ -45,14 +45,14 @@ class InventoryRepository {
           final currentStock = data['stock'] ?? 0;
           final itemName = data['name'] ?? 'Unknown';
           
-          print('INVENTORY_REPO: Deducting $qtyToDeduct from $itemName (Current: $currentStock)');
+          debugPrint('INVENTORY_REPO: Deducting $qtyToDeduct from $itemName (Current: $currentStock)');
           
           transaction.update(docRef, {
             'stock': currentStock - qtyToDeduct,
             'updatedAt': FieldValue.serverTimestamp(),
           });
         } else {
-          print('INVENTORY_REPO: WARNING - Inventory item $itemId not found for deduction');
+          debugPrint('INVENTORY_REPO: WARNING - Inventory item $itemId not found for deduction');
         }
       }
     });

@@ -99,7 +99,7 @@ class ClaimInviteNotifier extends AutoDisposeAsyncNotifier<void> {
     try {
       return await ref.read(inviteServiceProvider).findInviteByCode(code);
     } catch (e) {
-      print('ClaimInviteNotifier: findInvite failed for code $code: $e');
+      debugPrint('ClaimInviteNotifier: findInvite failed for code $code: $e');
       rethrow;
     }
   }

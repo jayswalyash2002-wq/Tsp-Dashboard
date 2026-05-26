@@ -369,7 +369,7 @@ class _AccentColorTile extends ConsumerWidget {
               spacing: 12,
               runSpacing: 12,
               children: colors.map((c) {
-                final isSelected = currentColor.value == c.color.value;
+                final isSelected = currentColor.toARGB32() == c.color.toARGB32();
                 return GestureDetector(
                   onTap: () => ref.read(accentColorProvider.notifier).setAccentColor(c.color),
                   child: Container(

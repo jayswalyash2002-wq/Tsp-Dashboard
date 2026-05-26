@@ -31,10 +31,10 @@ class HourlyHeatmap extends StatelessWidget {
             
             return Container(
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withOpacity(0.05 + (intensity * 0.85)),
+                color: theme.colorScheme.primary.withValues(alpha: 0.05 + (intensity * 0.85)),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: intensity > 0.5 ? theme.colorScheme.primary.withOpacity(0.3) : Colors.transparent,
+                  color: intensity > 0.5 ? theme.colorScheme.primary.withValues(alpha: 0.3) : Colors.transparent,
                 ),
               ),
               child: Column(
@@ -52,7 +52,7 @@ class HourlyHeatmap extends StatelessWidget {
                     Text(
                       '${(intensity * 100).toInt()}%',
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: intensity > 0.5 ? Colors.white.withOpacity(0.9) : theme.hintColor.withOpacity(0.7),
+                        color: intensity > 0.5 ? Colors.white.withValues(alpha: 0.9) : theme.hintColor.withValues(alpha: 0.7),
                         fontSize: 7,
                       ),
                     ),
@@ -72,7 +72,7 @@ class HourlyHeatmap extends StatelessWidget {
               height: 6,
               margin: const EdgeInsets.symmetric(horizontal: 2),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withOpacity(0.1 + (i * 0.2)),
+                color: theme.colorScheme.primary.withValues(alpha: 0.1 + (i * 0.2)),
                 borderRadius: BorderRadius.circular(2),
               ),
             )),

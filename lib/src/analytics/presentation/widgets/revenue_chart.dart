@@ -17,7 +17,7 @@ class RevenueChart extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.query_stats_rounded, size: 40, color: theme.hintColor.withOpacity(0.3)),
+            Icon(Icons.query_stats_rounded, size: 40, color: theme.hintColor.withValues(alpha: 0.3)),
             const SizedBox(height: 12),
             Text('No sales data yet', style: TextStyle(color: theme.hintColor)),
           ],
@@ -27,7 +27,7 @@ class RevenueChart extends StatelessWidget {
 
     final List<Color> gradientColors = [
       theme.colorScheme.primary,
-      theme.colorScheme.primary.withOpacity(0.0),
+      theme.colorScheme.primary.withValues(alpha: 0.0),
     ];
 
     return LineChart(
@@ -37,7 +37,7 @@ class RevenueChart extends StatelessWidget {
           drawVerticalLine: false,
           horizontalInterval: _calculateYInterval(data),
           getDrawingHorizontalLine: (value) => FlLine(
-            color: theme.dividerColor.withOpacity(0.05),
+            color: theme.dividerColor.withValues(alpha: 0.05),
             strokeWidth: 1,
           ),
         ),
@@ -61,7 +61,7 @@ class RevenueChart extends StatelessWidget {
                   child: Text(
                     DateFormat('d MMM').format(data[index].date),
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.hintColor.withOpacity(0.7),
+                      color: theme.hintColor.withValues(alpha: 0.7),
                       fontSize: 8,
                       fontWeight: FontWeight.w500,
                     ),
@@ -80,7 +80,7 @@ class RevenueChart extends StatelessWidget {
           touchTooltipData: LineTouchTooltipData(
             getTooltipColor: (touchedSpot) => theme.colorScheme.surface,
             tooltipRoundedRadius: 12,
-            tooltipBorder: BorderSide(color: theme.dividerColor.withOpacity(0.1)),
+            tooltipBorder: BorderSide(color: theme.dividerColor.withValues(alpha: 0.1)),
             getTooltipItems: (touchedSpots) {
               return touchedSpots.map((spot) {
                 return LineTooltipItem(
@@ -101,7 +101,7 @@ class RevenueChart extends StatelessWidget {
             curveSmoothness: 0.35,
             preventCurveOverShooting: true,
             gradient: LinearGradient(
-              colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.7)],
+              colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.7)],
             ),
             barWidth: 3,
             isStrokeCapRound: true,
@@ -117,7 +117,7 @@ class RevenueChart extends StatelessWidget {
             belowBarData: BarAreaData(
               show: true,
               gradient: LinearGradient(
-                colors: gradientColors.map((color) => color.withOpacity(0.15)).toList(),
+                colors: gradientColors.map((color) => color.withValues(alpha: 0.15)).toList(),
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),

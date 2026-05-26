@@ -99,7 +99,7 @@ class AnalyticsScreen extends ConsumerWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.model_training_rounded, size: 48, color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
+                      Icon(Icons.model_training_rounded, size: 48, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)),
                       const SizedBox(height: 16),
                       const Text(
                         'AI Model Training in Progress',
@@ -139,9 +139,9 @@ class AnalyticsScreen extends ConsumerWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer.withOpacity(0.2),
+            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: theme.colorScheme.primary.withOpacity(0.05)),
+            border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.05)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,7 +171,7 @@ class AnalyticsScreen extends ConsumerWidget {
                       width: 5,
                       height: 5,
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withOpacity(0.5),
+                        color: theme.colorScheme.primary.withValues(alpha: 0.5),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -181,7 +181,7 @@ class AnalyticsScreen extends ConsumerWidget {
                         alert,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           height: 1.4,
-                          color: theme.colorScheme.onSurface.withOpacity(0.8),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
                         ),
                       ),
                     ),
@@ -434,13 +434,13 @@ class AnalyticsScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: summary.lowStockCount > 0 
-                    ? Colors.red.withOpacity(0.05) 
-                    : Colors.green.withOpacity(0.05),
+                    ? Colors.red.withValues(alpha: 0.05) 
+                    : Colors.green.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: summary.lowStockCount > 0 
-                      ? Colors.red.withOpacity(0.1) 
-                      : Colors.green.withOpacity(0.1)
+                      ? Colors.red.withValues(alpha: 0.1) 
+                      : Colors.green.withValues(alpha: 0.1)
                   ),
                 ),
                 child: ListTile(
@@ -473,7 +473,7 @@ class AnalyticsScreen extends ConsumerWidget {
               error: (e, st) => Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
+                  color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
@@ -563,9 +563,9 @@ class AnalyticsScreen extends ConsumerWidget {
       data: (data) => Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.1),
+          color: Colors.grey.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.withOpacity(0.3)),
+          border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -638,7 +638,7 @@ class _SectionHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.08),
+            color: theme.colorScheme.primary.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, size: 16, color: theme.colorScheme.primary),
@@ -649,13 +649,13 @@ class _SectionHeader extends StatelessWidget {
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w800,
             letterSpacing: -0.2,
-            color: theme.colorScheme.onSurface.withOpacity(0.8),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Divider(
-            color: theme.dividerColor.withOpacity(0.05),
+            color: theme.dividerColor.withValues(alpha: 0.05),
             thickness: 1,
           ),
         ),

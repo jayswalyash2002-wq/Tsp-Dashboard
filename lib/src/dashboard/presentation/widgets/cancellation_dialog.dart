@@ -58,7 +58,7 @@ class _CancellationDialogState extends State<CancellationDialog> {
             const SizedBox(height: 16),
             const Text('Reason (optional)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
             DropdownButtonFormField<CancellationReason>(
-              value: _selectedReason,
+              initialValue: _selectedReason,
               items: CancellationReason.values
                   .map((r) => DropdownMenuItem(
                         value: r,

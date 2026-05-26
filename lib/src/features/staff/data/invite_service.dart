@@ -168,7 +168,7 @@ class InviteService {
 
   Future<InviteModel?> findInviteByCode(String code) async {
     try {
-      print('DEBUG: Searching for invite code: $code');
+      debugPrint('DEBUG: Searching for invite code: $code');
       // Collection Group query to find the invite across all businesses
       // We simplify the query to use only one where clause to potentially 
       // reduce index requirements, and handle 'isUsed' check in memory.
@@ -179,7 +179,7 @@ class InviteService {
           .get();
 
       if (snapshot.docs.isEmpty) {
-        print('DEBUG: No invite found with code: $code');
+        debugPrint('DEBUG: No invite found with code: $code');
         return null;
       }
       
@@ -187,21 +187,21 @@ class InviteService {
       final invite = InviteModel.fromMap(doc.data(), doc.id);
       
       if (invite.isUsed) {
-        print('DEBUG: Invite code $code found but already used.');
+        debugPrint('DEBUG: Invite code $code found but already used.');
         return null;
       }
       
-      print('DEBUG: Invite found for business: ${invite.businessId}');
+      debugPrint('DEBUG: Invite found for business: ${invite.businessId}');
       return invite;
     } catch (e, s) {
-      print('FIRESTORE_ERROR: findInviteByCode failed for code $code');
-      print('Error: $e');
+      debugPrint('FIRESTORE_ERROR: findInviteByCode failed for code $code');
+      debugPrint('Error: $e');
       if (e.toString().contains('failed-precondition')) {
-        print('INSTRUCTION: This query requires a Collection Group index for "invites".');
-        print('Go to the Firebase Console -> Firestore -> Indexes -> Composite.');
-        print('Create an index for Collection ID: invites, Field: code (Ascending), Query Scope: Collection Group.');
+        debugPrint('INSTRUCTION: This query requires a Collection Group index for "invites".');
+        debugPrint('Go to the Firebase Console -> Firestore -> Indexes -> Composite.');
+        debugPrint('Create an index for Collection ID: invites, Field: code (Ascending), Query Scope: Collection Group.');
       }
-      print('Stacktrace: $s');
+      debugPrint('Stacktrace: $s');
       rethrow;
     }
   }

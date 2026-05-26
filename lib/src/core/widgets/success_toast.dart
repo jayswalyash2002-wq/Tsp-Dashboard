@@ -81,13 +81,13 @@ class _SuccessToastState extends State<SuccessToast> with SingleTickerProviderSt
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
                     ],
                     border: Border.all(
-                      color: Colors.green.withOpacity(0.2),
+                      color: Colors.green.withValues(alpha: 0.2),
                       width: 1,
                     ),
                   ),
@@ -97,7 +97,7 @@ class _SuccessToastState extends State<SuccessToast> with SingleTickerProviderSt
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
+                          color: Colors.green.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(

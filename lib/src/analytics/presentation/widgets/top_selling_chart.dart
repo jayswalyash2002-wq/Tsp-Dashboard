@@ -29,7 +29,7 @@ class TopSellingChart extends StatelessWidget {
                 height: 24,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: index < 3 ? theme.colorScheme.primary.withOpacity(0.1) : Colors.transparent,
+                  color: index < 3 ? theme.colorScheme.primary.withValues(alpha: 0.1) : Colors.transparent,
                   shape: BoxShape.circle,
                 ),
                 child: Text(
@@ -66,9 +66,9 @@ class TopSellingChart extends StatelessWidget {
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
                         value: item.value / 100,
-                        backgroundColor: theme.dividerColor.withOpacity(0.05),
+                        backgroundColor: theme.dividerColor.withValues(alpha: 0.05),
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          index < 3 ? theme.colorScheme.primary : theme.colorScheme.primary.withOpacity(0.4),
+                          index < 3 ? theme.colorScheme.primary : theme.colorScheme.primary.withValues(alpha: 0.4),
                         ),
                         minHeight: 6,
                       ),

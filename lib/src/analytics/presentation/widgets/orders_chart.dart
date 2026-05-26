@@ -16,7 +16,7 @@ class OrdersChart extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.bar_chart_rounded, size: 40, color: theme.hintColor.withOpacity(0.3)),
+            Icon(Icons.bar_chart_rounded, size: 40, color: theme.hintColor.withValues(alpha: 0.3)),
             const SizedBox(height: 12),
             Text('No order data yet', style: TextStyle(color: theme.hintColor)),
           ],
@@ -35,7 +35,7 @@ class OrdersChart extends StatelessWidget {
           touchTooltipData: BarTouchTooltipData(
             getTooltipColor: (group) => theme.colorScheme.surface,
             tooltipRoundedRadius: 8,
-            tooltipBorder: BorderSide(color: theme.dividerColor.withOpacity(0.1)),
+            tooltipBorder: BorderSide(color: theme.dividerColor.withValues(alpha: 0.1)),
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
               return BarTooltipItem(
                 '${rod.toY.round()} orders',
@@ -67,7 +67,7 @@ class OrdersChart extends StatelessWidget {
                     data[index].label ?? '',
                     style: theme.textTheme.labelSmall?.copyWith(
                       fontSize: 8,
-                      color: theme.hintColor.withOpacity(0.7),
+                      color: theme.hintColor.withValues(alpha: 0.7),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -86,13 +86,13 @@ class OrdersChart extends StatelessWidget {
             barRods: [
               BarChartRodData(
                 toY: e.value.value,
-                color: isPeak ? theme.colorScheme.primary : theme.colorScheme.primary.withOpacity(0.3),
+                color: isPeak ? theme.colorScheme.primary : theme.colorScheme.primary.withValues(alpha: 0.3),
                 width: 14,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
                 backDrawRodData: BackgroundBarChartRodData(
                   show: true,
                   toY: limit,
-                  color: theme.dividerColor.withOpacity(0.04),
+                  color: theme.dividerColor.withValues(alpha: 0.04),
                 ),
               ),
             ],

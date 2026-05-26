@@ -9,13 +9,17 @@ import '../data/inventory_providers.dart';
 import '../data/inventory_repository.dart';
 import '../domain/inventory_item.dart';
 
+/// A service class that handles inventory-related business logic and coordinates
+/// between the inventory repository, Firestore, and activity logging.
 class InventoryService {
   final Ref _ref;
   final InventoryRepository? _inventoryRepo;
   final FirebaseFirestore _db;
 
+  /// Creates an instance of [InventoryService].
   InventoryService(this._ref, this._inventoryRepo, this._db);
 
+  /// Adds a new [InventoryItem] to the repository and logs the activity.
   Future<void> addItem(InventoryItem item) async {
     if (_inventoryRepo == null) return;
     await _inventoryRepo.addInventoryItem(item);
@@ -32,6 +36,10 @@ class InventoryService {
     );
   }
 
+  /// Updates an existing [InventoryItem].
+  /// 
+  /// If the stock level has changed, it logs an [ActivityAction.inventoryStockAdjusted].
+  /// Otherwise, it logs an [ActivityAction.inventoryItemModified].
   Future<void> updateItem(InventoryItem oldItem, InventoryItem newItem) async {
     if (_inventoryRepo == null) return;
     await _inventoryRepo.updateInventoryItem(newItem);
@@ -59,6 +67,7 @@ class InventoryService {
     }
   }
 
+  /// Deletes an [InventoryItem] and logs the activity.
   Future<void> deleteItem(InventoryItem item) async {
     if (_inventoryRepo == null) return;
     await _inventoryRepo.deleteInventoryItem(item.id);
@@ -72,6 +81,11 @@ class InventoryService {
     );
   }
 
+  /// Deducts inventory stock based on the [OrderLine]s in an order.
+  /// 
+  /// It iterates through each line, checks for consumable mappings, and
+  /// performs a bulk deduction via the repository. It also updates the
+  /// order's `inventoryDeducted` flag in Firestore.
   Future<void> deductForOrder(List<OrderLine> lines, String orderId) async {
     if (_inventoryRepo == null) return;
 
@@ -114,6 +128,10 @@ class InventoryService {
     }
   }
 
+  /// Restores inventory stock for a [SavedOrder] that was previously deducted.
+  /// 
+  /// This is typically used when an order is cancelled. It updates the
+  /// order's flags in Firestore to reflect the restoration.
   Future<void> restoreForOrder(SavedOrder order) async {
     if (_inventoryRepo == null) return;
     if (!order.inventoryDeducted) return;
@@ -154,6 +172,7 @@ class InventoryService {
   }
 }
 
+/// Provider for the [InventoryService] instance.
 final inventoryServiceProvider = Provider<InventoryService>((ref) {
   return InventoryService(
     ref,

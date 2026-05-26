@@ -1,7 +1,6 @@
 import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../data/dashboard_providers.dart';
 import '../domain/menu_item.dart';
 import '../../activity_log/presentation/providers/activity_log_providers.dart';
@@ -289,7 +288,6 @@ class _EditMenuItemDialogState extends ConsumerState<_EditMenuItemDialog> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final initialCategory = widget.initialCategory;
-    final cs = Theme.of(context).colorScheme;
 
     return AlertDialog(
       title: Text(item == null ? 'Add Item to ${initialCategory ?? "Menu"}' : 'Edit Item'),
@@ -405,13 +403,13 @@ class _EditMenuItemDialogState extends ConsumerState<_EditMenuItemDialog> {
                       ),
                 );
               }
-              if (!mounted) return;
+              if (!context.mounted) return;
               Navigator.pop(context);
               // Expand category automatically when adding new item
               final currentExpanded = ref.read(expandedCategoriesProvider);
               ref.read(expandedCategoriesProvider.notifier).state = {...currentExpanded, cat};
             } catch (e) {
-              if (!mounted) return;
+              if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
             }
           },
@@ -603,7 +601,8 @@ void _showDeleteCategoryConfirm(BuildContext context, WidgetRef ref, String cate
                 await repo.deleteMenuItem(item.id);
               }
             }
-            if (context.mounted) Navigator.pop(context);
+            if (!context.mounted) return;
+            Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Category $category deleted')),
             );
@@ -624,10 +623,10 @@ void _showDeleteConfirm(BuildContext context, WidgetRef ref, MenuItem item) {
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         TextButton(
-          onPressed: () {
+          onPressed: () async {
             final repo = ref.read(menuRepositoryProvider);
             if (repo != null) {
-              repo.deleteMenuItem(item.id);
+              await repo.deleteMenuItem(item.id);
               unawaited(
                 ref.read(logActivityUseCaseProvider).execute(
                       action: ActivityAction.menuItemDeleted,
@@ -638,6 +637,7 @@ void _showDeleteConfirm(BuildContext context, WidgetRef ref, MenuItem item) {
                     ),
               );
             }
+            if (!context.mounted) return;
             Navigator.pop(context);
           },
           child: const Text('Delete', style: TextStyle(color: Colors.red)),
@@ -766,7 +766,7 @@ class _MenuItemTile extends StatelessWidget {
             child: Switch.adaptive(
               value: item.available,
               onChanged: onStatusChange,
-              activeColor: cs.primary,
+              activeThumbColor: cs.primary,
             ),
           ),
           // Actions Menu

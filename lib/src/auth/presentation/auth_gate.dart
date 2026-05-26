@@ -13,11 +13,6 @@ import 'intent_selection_screen.dart';
 import '../../memberships/data/membership_providers.dart';
 import '../../memberships/domain/membership.dart';
 import '../../memberships/presentation/business_selector_screen.dart';
-import '../../business/presentation/business_setup_screen.dart';
-import '../../business/data/business_providers.dart';
-import '../../core/device/device_providers.dart';
-import '../../activity_log/domain/entities/activity_log_enums.dart';
-import '../../activity_log/data/models/activity_log_model.dart';
 import '../../features/staff/providers/staff_providers.dart';
 
 import 'package:go_router/go_router.dart';

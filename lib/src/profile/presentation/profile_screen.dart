@@ -348,28 +348,15 @@ class _BusinessStatusCard extends ConsumerWidget {
                       label: 'Closed at',
                       value: DateFormat('hh:mm a').format(session.closedAt!),
                     ),
-                  const SizedBox(height: 16),
                 ],
-                if (isOpen)
-                  FilledButton.icon(
-                    onPressed: () => _showCloseConfirm(context, ref),
-                    icon: const Icon(Icons.lock_outline),
-                    label: const Text('CLOSE BUSINESS'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: cs.error,
-                      foregroundColor: cs.onError,
-                    ),
-                  )
-                else
-                  FilledButton.icon(
-                    onPressed: () => _openBusiness(context, ref),
-                    icon: const Icon(Icons.lock_open),
-                    label: const Text('OPEN BUSINESS'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
+                const SizedBox(height: 16),
+                Text(
+                  'Managed automatically • Override available in Settings',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.4),
+                      ),
+                ),
               ],
             ),
           ),
@@ -377,92 +364,6 @@ class _BusinessStatusCard extends ConsumerWidget {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Text('Session error: $e'),
-    );
-  }
-
-  Future<void> _openBusiness(BuildContext context, WidgetRef ref) async {
-    final now = DateTime.now();
-    final businessDate = BusinessDateUtils.formatBusinessDate(now);
-    final repo = ref.read(sessionRepositoryProvider);
-    if (repo == null) return;
-
-    try {
-      await repo.openBusiness(businessDate);
-
-      final business = ref.read(currentBusinessProvider).value;
-      unawaited(
-        ref.read(logActivityUseCaseProvider).execute(
-          action: ActivityAction.businessOpened,
-          category: ActivityCategory.operational,
-          targetType: 'business',
-          targetId: business?.id,
-          targetName: business?.businessName,
-          metadata: {
-            'businessDate': businessDate,
-          },
-        ),
-      );
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to open business: $e')),
-        );
-      }
-    }
-  }
-
-  void _showCloseConfirm(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Close Business?'),
-        content: const Text('This will end the current business session.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: () async {
-              final repo = ref.read(sessionRepositoryProvider);
-              if (repo != null) {
-                try {
-                  final session = ref.read(currentSessionProvider).value;
-                  final balances = ref.read(balancesProvider).value ?? {};
-
-                  await repo.closeBusiness();
-
-                  final business = ref.read(currentBusinessProvider).value;
-
-                  Map<String, dynamic> metadata = {
-                    'closingCash': (balances['cashBalancePaise'] ?? 0) / 100,
-                    'closingBank': (balances['bankBalancePaise'] ?? 0) / 100,
-                  };
-
-                  if (session?.openedAt != null) {
-                    final duration = DateTime.now().difference(session!.openedAt!);
-                    metadata['shiftDurationMinutes'] = duration.inMinutes;
-                  }
-
-                  unawaited(
-                    ref.read(logActivityUseCaseProvider).execute(
-                      action: ActivityAction.businessClosed,
-                      category: ActivityCategory.operational,
-                      targetType: 'business',
-                      targetId: business?.id,
-                      targetName: business?.businessName,
-                      metadata: metadata,
-                    ),
-                  );
-                } catch (e) {
-                  debugPrint('Error closing business: $e');
-                }
-              }
-              if (context.mounted) Navigator.pop(context);
-            },
-            child: const Text('Close', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
     );
   }
 }

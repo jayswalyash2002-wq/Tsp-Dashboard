@@ -67,7 +67,7 @@ class ExpensePieChart extends StatelessWidget {
                     item.category,
                     style: theme.textTheme.labelSmall?.copyWith(
                       fontSize: 9,
-                      color: theme.hintColor.withOpacity(0.8),
+                      color: theme.hintColor.withValues(alpha: 0.8),
                     ),
                   ),
                 ],

@@ -106,7 +106,7 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
               ),
               const SizedBox(height: 20),
               DropdownButtonFormField<Role>(
-                value: _selectedRole,
+                initialValue: _selectedRole,
                 onChanged: isLoading ? null : (v) => setState(() => _selectedRole = v!),
                 decoration: InputDecoration(
                   labelText: 'Role',
