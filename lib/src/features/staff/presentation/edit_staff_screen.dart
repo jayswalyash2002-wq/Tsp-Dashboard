@@ -65,7 +65,10 @@ class _EditStaffScreenState extends ConsumerState<EditStaffScreen> {
         permissionOverrides: _permissionOverrides,
       );
 
-      await repo.updateStaffMember(updatedStaff);
+      final performer = ref.read(userProfileProvider).value;
+      if (performer == null) throw Exception('Performer profile not found');
+
+      await repo.updateStaffMember(updatedStaff, performer: performer);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Staff member updated successfully')),

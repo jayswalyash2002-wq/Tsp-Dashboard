@@ -38,6 +38,7 @@ dependencies:
   share_plus: ^10.1.4
   qr_flutter: ^4.1.0
   mobile_scanner: ^5.2.3
+  fl_chart: ^0.71.0
 
   # Exporting
   excel: ^4.0.5

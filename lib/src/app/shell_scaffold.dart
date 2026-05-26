@@ -38,6 +38,11 @@ class ShellScaffold extends ConsumerWidget {
               selectedIcon: Icon(Icons.receipt_long),
               label: 'Expenses',
             ),
+            const NavigationDestination(
+              icon: Icon(Icons.analytics_outlined),
+              selectedIcon: Icon(Icons.analytics),
+              label: 'Analytics',
+            ),
             NavigationDestination(
               icon: Badge(
                 label: null,

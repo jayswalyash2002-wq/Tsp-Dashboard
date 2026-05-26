@@ -27,6 +27,7 @@ import 'package:tsp_dashboard/src/features/staff/presentation/edit_staff_screen.
 import 'package:tsp_dashboard/src/features/staff/presentation/invite_code_screen.dart';
 import 'package:tsp_dashboard/src/features/staff/presentation/pending_invites_screen.dart';
 import 'package:tsp_dashboard/src/activity_log/presentation/screens/activity_log_screen.dart';
+import 'package:tsp_dashboard/src/analytics/presentation/analytics_screen.dart';
 import 'package:tsp_dashboard/src/app/shell_scaffold.dart';
 import 'package:tsp_dashboard/src/constants/roles.dart'; // Added for extra param casting
 
@@ -70,6 +71,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         '/staff': Permission.manageStaff,
         '/activity-log': Permission.viewActivityLog,
         '/inventory': Permission.manageInventory,
+        '/analytics': Permission.viewAnalytics,
       };
 
       for (final entry in routePermissions.entries) {
@@ -227,6 +229,16 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                     path: '/expenses',
                     pageBuilder: (context, state) => const NoTransitionPage(
                       child: ExpensesScreen(),
+                    ),
+                  ),
+                ],
+              ),
+              StatefulShellBranch(
+                routes: [
+                  GoRoute(
+                    path: '/analytics',
+                    pageBuilder: (context, state) => const NoTransitionPage(
+                      child: AnalyticsScreen(),
                     ),
                   ),
                 ],

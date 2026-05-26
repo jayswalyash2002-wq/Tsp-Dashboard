@@ -27,6 +27,8 @@ class Business {
   final String businessStatus; // 'open' or 'closed'
   final bool manualOverride;
   final DateTime? lastStatusUpdate;
+  final int businessDayStartHour;
+  final String timezone;
 
   Business({
     required this.id,
@@ -53,6 +55,8 @@ class Business {
     this.businessStatus = 'open',
     this.manualOverride = false,
     this.lastStatusUpdate,
+    this.businessDayStartHour = 0,
+    this.timezone = 'UTC',
   });
 
   bool get isGstRegistered => gstNumber != null && gstNumber!.trim().isNotEmpty;
@@ -83,6 +87,8 @@ class Business {
       businessStatus: map['businessStatus'] ?? 'open',
       manualOverride: map['manualOverride'] ?? false,
       lastStatusUpdate: (map['lastStatusUpdate'] as Timestamp?)?.toDate(),
+      businessDayStartHour: map['businessDayStartHour'] ?? 0,
+      timezone: map['timezone'] ?? 'UTC',
     );
   }
 
@@ -112,6 +118,8 @@ class Business {
       'businessStatus': businessStatus,
       'manualOverride': manualOverride,
       'lastStatusUpdate': lastStatusUpdate != null ? Timestamp.fromDate(lastStatusUpdate!) : null,
+      'businessDayStartHour': businessDayStartHour,
+      'timezone': timezone,
     };
   }
 
@@ -146,6 +154,8 @@ class Business {
     String? businessStatus,
     bool? manualOverride,
     DateTime? lastStatusUpdate,
+    int? businessDayStartHour,
+    String? timezone,
   }) {
     return Business(
       id: id ?? this.id,
@@ -172,6 +182,8 @@ class Business {
       businessStatus: businessStatus ?? this.businessStatus,
       manualOverride: manualOverride ?? this.manualOverride,
       lastStatusUpdate: lastStatusUpdate ?? this.lastStatusUpdate,
+      businessDayStartHour: businessDayStartHour ?? this.businessDayStartHour,
+      timezone: timezone ?? this.timezone,
     );
   }
 }

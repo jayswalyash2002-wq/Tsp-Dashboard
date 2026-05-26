@@ -31,6 +31,7 @@ enum RoleType {
           Permission.manageMenu,
           Permission.manageDiscounts,
           Permission.viewActivityLog,
+          Permission.viewAnalytics,
         };
       case RoleType.cashier:
         return {
@@ -48,6 +49,7 @@ enum RoleType {
       case RoleType.viewer:
         return {
           Permission.viewReports,
+          Permission.viewAnalytics,
         };
       case RoleType.kitchen:
         return {
@@ -57,6 +59,7 @@ enum RoleType {
         return {
           Permission.viewReports,
           Permission.manageExpenses,
+          Permission.viewAnalytics,
         };
     }
   }

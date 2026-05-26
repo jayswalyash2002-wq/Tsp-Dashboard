@@ -7,6 +7,7 @@ import 'order_shared_widgets.dart';
 import '../../../core/rbac/permission.dart';
 import '../../../core/rbac/permission_gate.dart';
 import '../../../business/data/business_providers.dart';
+import '../../../core/utils/toast_service.dart';
 
 class CheckoutBottomSheet extends ConsumerStatefulWidget {
   const CheckoutBottomSheet({super.key});
@@ -273,10 +274,10 @@ class _CheckoutBottomSheetState extends ConsumerState<CheckoutBottomSheet> {
                                       final messenger = ScaffoldMessenger.of(context);
                                       try {
                                         await ref.read(orderControllerProvider.notifier).submit();
-                                        if (mounted) Navigator.pop(context);
-                                        messenger.showSnackBar(
-                                          const SnackBar(content: Text('Order completed successfully')),
-                                        );
+                                        if (mounted) {
+                                          ref.read(toastServiceProvider).showSuccess(context, 'Order completed successfully');
+                                          Navigator.pop(context);
+                                        }
                                       } catch (e) {
                                         messenger.showSnackBar(
                                           SnackBar(content: Text('Failed to save order: $e')),

@@ -12,5 +12,6 @@ enum Permission {
   manageInventory,
   managePurchases,
   manageMenu,
-  manageDiscounts;
+  manageDiscounts,
+  viewAnalytics;
 }

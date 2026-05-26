@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/order_models.dart';
 import '../../application/order_controller.dart';
+import '../../../core/utils/toast_service.dart';
 
 class CancellationDialog extends StatefulWidget {
   const CancellationDialog({super.key, required this.order});
@@ -91,10 +92,8 @@ class _CancellationDialogState extends State<CancellationDialog> {
                               reason: _selectedReason,
                             );
                         if (context.mounted) {
+                          ref.read(toastServiceProvider).showSuccess(context, 'Order cancelled successfully');
                           Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Order cancelled successfully')),
-                          );
                         }
                       } catch (e) {
                         setState(() => _isProcessing = false);

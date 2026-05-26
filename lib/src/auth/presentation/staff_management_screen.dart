@@ -233,7 +233,10 @@ class _ActiveStaffTab extends ConsumerWidget {
                 final repo = ref.read(staffRepositoryProvider);
                 if (repo == null) throw Exception('Staff repository not available');
                 
-                await repo.removeMember(staff.uid);
+                final performer = ref.read(userProfileProvider).value;
+                if (performer == null) throw Exception('Performer profile not found');
+                
+                await repo.removeMember(staff.uid, performer: performer);
                 
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(

@@ -10,6 +10,7 @@ import '../domain/app_user.dart';
 import 'auth_repository.dart';
 import 'staff_repository.dart';
 import 'otp_service.dart';
+import '../../activity_log/presentation/providers/activity_log_providers.dart';
 
 import '../../memberships/data/membership_providers.dart';
 
@@ -43,7 +44,11 @@ final userBusinessIdProvider = Provider<String?>((ref) {
 final staffRepositoryProvider = Provider<StaffRepository?>((ref) {
   final businessId = ref.watch(userBusinessIdProvider);
   if (businessId == null) return null;
-  return StaffRepository(ref.watch(firestoreProvider), businessId);
+  return StaffRepository(
+    ref.watch(firestoreProvider), 
+    businessId,
+    ref.watch(activityLogRepositoryProvider),
+  );
 });
 
 final staffListProvider = StreamProvider<List<AppUser>>((ref) {
