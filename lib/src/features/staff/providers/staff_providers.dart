@@ -91,6 +91,9 @@ class ClaimInviteNotifier extends AutoDisposeAsyncNotifier<void> {
       // Invalidate profile and memberships to trigger refresh
       debugPrint('STEP_4_MEMBERSHIP_REFRESH: Invalidating providers');
       ref.invalidate(userProfileProvider);
+      // Invalidate leaf stream providers to force a fresh fetch from Firestore
+      ref.invalidate(legacyMembershipsProvider);
+      ref.invalidate(newMembershipsProvider);
       ref.invalidate(userMembershipsProvider);
     });
   }

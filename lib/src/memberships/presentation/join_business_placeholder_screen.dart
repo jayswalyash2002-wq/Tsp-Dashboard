@@ -64,10 +64,11 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
   }
 
   void _setError(String? message) {
-    setState(() => _error = message);
+    if (mounted) setState(() => _error = message);
   }
 
   Future<void> _validateInvite(String code) async {
+    if (!mounted) return;
     setState(() {
       _isValidating = true;
       _error = null;
@@ -89,6 +90,7 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
         return;
       }
 
+      if (!mounted) return;
       setState(() {
         _previewInvite = invite;
         _previewBusiness = business;
@@ -103,7 +105,7 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
       debugPrint('INVITE_VALIDATION_ERROR: $e');
       _setError('Error verifying invite: $e');
     } finally {
-      setState(() => _isValidating = false);
+      if (mounted) setState(() => _isValidating = false);
     }
   }
 
@@ -219,20 +221,30 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
       // Wait for memberships to refresh to prevent AuthGate race condition
       int retries = 0;
       bool synced = false;
-      while (mounted && retries < 12) {
+      while (mounted && retries < 20) { // Increased retries to 10s total
+        // Explicitly trigger a refresh check
         final mAsync = ref.read(userMembershipsProvider);
-        if (mAsync.hasValue && mAsync.value!.isNotEmpty) {
-          debugPrint('CLAIM_PROCESS: Memberships synced successfully (found ${mAsync.value!.length} items).');
-          synced = true;
-          break;
+        
+        if (mAsync.hasValue) {
+          final memberships = mAsync.value!;
+          // Look specifically for the business we just joined
+          final joined = memberships.where((m) => m.businessId == businessId).firstOrNull;
+          
+          if (joined != null) {
+            debugPrint('CLAIM_PROCESS: Membership for $businessId synced successfully.');
+            synced = true;
+            break;
+          }
         }
-        debugPrint('CLAIM_PROCESS: Syncing... (attempt ${retries + 1}/12)');
+        
+        debugPrint('CLAIM_PROCESS: Syncing membership for $businessId... (attempt ${retries + 1}/20)');
         await Future.delayed(const Duration(milliseconds: 500));
         retries++;
       }
 
       if (!synced) {
-        debugPrint('CLAIM_PROCESS: Sync warning: Memberships not found in provider after 6s.');
+        debugPrint('CLAIM_PROCESS: Sync warning: Membership for $businessId not found in provider after 10s.');
+        // We still proceed, but the user might hit the AuthGate loader for a few more seconds
       }
 
       if (mounted) {

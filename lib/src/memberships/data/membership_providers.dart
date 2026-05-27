@@ -11,9 +11,12 @@ final membershipRepositoryProvider = Provider<MembershipRepository>((ref) {
 /// Internal provider for legacy membership structure
 final legacyMembershipsProvider = StreamProvider<List<Membership>>((ref) {
   final user = ref.watch(authStateChangesProvider).value;
-  if (user == null) return Stream.value([]);
+  if (user == null) {
+    debugPrint('MEMBERSHIP_FETCH: No user found for legacy fetch');
+    return Stream.value([]);
+  }
   
-  debugPrint('MEMBERSHIP_FETCH: Fetching legacy for ${user.uid}');
+  debugPrint('MEMBERSHIP_FETCH: Fetching legacy for UID: ${user.uid}');
   final db = ref.watch(firestoreProvider);
   return db
       .collection('memberships')
@@ -30,9 +33,12 @@ final legacyMembershipsProvider = StreamProvider<List<Membership>>((ref) {
 /// Internal provider for new multi-tenant membership structure
 final newMembershipsProvider = StreamProvider<List<Membership>>((ref) {
   final user = ref.watch(authStateChangesProvider).value;
-  if (user == null) return Stream.value([]);
+  if (user == null) {
+    debugPrint('MEMBERSHIP_FETCH: No user found for new fetch');
+    return Stream.value([]);
+  }
   
-  debugPrint('MEMBERSHIP_FETCH: Fetching collectionGroup members for ${user.uid}');
+  debugPrint('MEMBERSHIP_FETCH: Fetching collectionGroup members for UID: ${user.uid}');
   final db = ref.watch(firestoreProvider);
   return db
       .collectionGroup('members')

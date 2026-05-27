@@ -117,7 +117,15 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
     switch (state) {
       case _AppState.loading:
-        return _BlockingLoader(showWarning: _showStuckWarning);
+        return _BlockingLoader(
+          showWarning: _showStuckWarning,
+          onRefresh: () {
+            ref.invalidate(userProfileProvider);
+            ref.invalidate(legacyMembershipsProvider);
+            ref.invalidate(newMembershipsProvider);
+            ref.invalidate(userMembershipsProvider);
+          },
+        );
       case _AppState.intentSelection:
         return const IntentSelectionScreen();
       case _AppState.login:
@@ -182,7 +190,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         if (membershipsAsync.isLoading) waitingOn.add('Memberships');
         if (profileAsync.isLoading) waitingOn.add('Profile');
         
-        debugPrint('AUTH_GATE: Loading state active. Waiting on: ${waitingOn.join(', ')}');
+        debugPrint('AUTH_GATE: Loading state active. Waiting on: ${waitingOn.join(', ')}. Path: $currentPath');
       }
       return _AppState.loading;
     }
@@ -214,7 +222,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
       // Clear session on logout
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (ref.read(sessionProvider).businessId != null) {
+        if (mounted && ref.read(sessionProvider).businessId != null) {
           debugPrint('AUTH_GATE: Clearing session on logout');
           ref.read(sessionProvider.notifier).clear();
         }
@@ -223,11 +231,11 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     }
 
     if (kDebugMode) {
-      debugPrint('AUTH_GATE: User: ${user.uid}, Email: ${user.email}');
+      debugPrint('AUTH_GATE: User Resolved: ${user.uid}. Email: ${user.email}. Path: $currentPath');
     }
 
     final memberships = membershipsAsync.value ?? [];
-    final profile = profileAsync.value;
+    final profile = profileAsync.value; 
     
     final activeMemberships = memberships.where((m) => 
       m.status == MembershipStatus.accepted).toList();
@@ -239,7 +247,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       m.status == MembershipStatus.removed).toList();
 
     if (kDebugMode) {
-      debugPrint('AUTH_GATE: Memberships: Total=${memberships.length}, Active=${activeMemberships.length}, Pending=${pendingMemberships.length}, Denied=${deniedMemberships.length}');
+      debugPrint('AUTH_GATE: Membership Stats: Total=${memberships.length}, Active=${activeMemberships.length}, Pending=${pendingMemberships.length}, Denied=${deniedMemberships.length}');
       if (profile?.businessId != null) {
         debugPrint('AUTH_GATE: Profile BusinessId: ${profile?.businessId}');
       }
@@ -250,9 +258,9 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     // CASE A — empty result (no memberships at all)
     if (memberships.isEmpty) {
       // If we are still loading profile or memberships, wait.
-      if (profile != null && profile.businessId != null && !_showStuckWarning) {
+      if (profile != null && profile.businessId != null) {
         if (kDebugMode) {
-          debugPrint('AUTH_GATE: Profile has businessId (${profile.businessId}) but no membership doc found yet. Waiting...');
+          debugPrint('AUTH_GATE: Profile has businessId (${profile.businessId}) but memberships provider is empty. Waiting for sync...');
         }
         return _AppState.loading;
       }
@@ -260,11 +268,11 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       // If we are on a protected route but memberships are empty, wait a bit
       // to avoid race conditions after signup/invite claim.
       final onboardingRoutes = ['/business-setup', '/auth/join', '/auth/signup', '/auth/otp', '/onboarding'];
-      final isProtected = !onboardingRoutes.contains(currentPath) && currentPath != '/';
+      final isProtected = !onboardingRoutes.contains(currentPath) && currentPath != '/' && currentPath != '';
       
-      if (isProtected && !_showStuckWarning) {
+      if (isProtected) {
         if (kDebugMode) {
-          debugPrint('AUTH_GATE: Protected route $currentPath with no memberships. Waiting for sync...');
+          debugPrint('AUTH_GATE: Protected route $currentPath with no memberships. Showing loader to allow sync...');
         }
         return _AppState.loading;
       }
@@ -320,11 +328,22 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     // CASE C: Resolution for Active Memberships
     if (session.businessId != null) {
       final currentMembership = activeMemberships.where((m) => m.businessId == session.businessId).firstOrNull;
+      
       if (currentMembership == null) {
         // Active session is for a business where membership is no longer active
-        debugPrint('AUTH_GATE: Session exists for ${session.businessId} but membership is no longer accepted.');
+        
+        // SYNC CHECK: If the user profile STILL says they belong to this business, 
+        // it's likely a Firestore sync lag. We wait instead of clearing.
+        if (profile?.businessId == session.businessId && !_showStuckWarning) {
+          if (kDebugMode) {
+            debugPrint('AUTH_GATE: Session exists for ${session.businessId} but membership not found in query yet. Profile matches. WAITING for sync...');
+          }
+          return _AppState.loading;
+        }
+
+        debugPrint('AUTH_GATE: Session exists for ${session.businessId} but membership is no longer accepted or profile changed. Clearing session.');
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          ref.read(sessionProvider.notifier).clear();
+          if (mounted) ref.read(sessionProvider.notifier).clear();
         });
         return _AppState.loading;
       }
@@ -400,8 +419,9 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 }
 
 class _BlockingLoader extends StatelessWidget {
-  const _BlockingLoader({this.showWarning = false});
+  const _BlockingLoader({this.showWarning = false, this.onRefresh});
   final bool showWarning;
+  final VoidCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -421,18 +441,21 @@ class _BlockingLoader extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 40),
                 child: Text(
-                  'We are having trouble connecting to the server. Please check your internet connection or try restarting the app.',
+                  'We are having trouble syncing your account. This can happen during first-time join if Firestore indexing is slow.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ),
               const SizedBox(height: 24),
+              if (onRefresh != null)
+                TextButton.icon(
+                  onPressed: onRefresh,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry Sync'),
+                ),
               TextButton(
-                onPressed: () {
-                  // In a real app, we might trigger a global refresh or sign out
-                  // For now, just a hint to the user.
-                },
-                child: const Text('Still waiting?'),
+                onPressed: () => FirebaseAuth.instance.signOut(),
+                child: const Text('Sign Out', style: TextStyle(color: Colors.red)),
               ),
             ],
           ],
