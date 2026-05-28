@@ -55,7 +55,7 @@ class _NormalCartBar extends ConsumerWidget {
           isScrollControlled: true,
           useSafeArea: true,
           backgroundColor: Colors.transparent,
-          builder: (_) => const CheckoutBottomSheet(),
+          builder: (_) => CheckoutBottomSheet(),
         );
       },
       child: Container(

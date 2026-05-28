@@ -57,6 +57,17 @@ class OrderController extends Notifier<OrderControllerState> {
     );
   }
 
+  void repeatOrder(SavedOrder order) {
+    state = build().copyWith(
+      draft: state.draft.copyWith(
+        lines: order.lines,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        customerId: order.customerId,
+      ),
+    );
+  }
+
   void add(MenuItem item) {
     final existing = state.draft.lineFor(item.id);
     if (existing == null) {

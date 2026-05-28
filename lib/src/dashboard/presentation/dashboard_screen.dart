@@ -7,6 +7,7 @@ import '../application/order_controller.dart';
 import '../data/dashboard_providers.dart';
 import '../domain/menu_item.dart';
 import 'widgets/sticky_cart_bar.dart';
+import 'widgets/checkout_bottom_sheet.dart';
 
 import '../../memberships/data/membership_providers.dart';
 import '../../business/data/business_providers.dart';
@@ -46,6 +47,21 @@ class DashboardScreen extends ConsumerWidget {
     final orderState = ref.watch(orderControllerProvider);
     final draft = orderState.draft;
     final isCancelled = orderState.originalOrder?.isCancelled ?? false;
+
+    // Automatically show cart when editing starts
+    ref.listen(orderControllerProvider.select((s) => s.isEditing), (prev, next) {
+      if (next && prev != next) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            useSafeArea: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => CheckoutBottomSheet(),
+          );
+        });
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(

@@ -9,6 +9,8 @@ import '../data/dashboard_providers.dart';
 import '../domain/order_models.dart';
 import '../../core/format/money.dart';
 import '../../business/data/business_providers.dart';
+import '../../core/utils/toast_service.dart';
+import 'package:share_plus/share_plus.dart';
 
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
@@ -90,77 +92,130 @@ class _DateHeader extends StatelessWidget {
   }
 }
 
-class _OrderTile extends StatelessWidget {
+class _OrderTile extends ConsumerWidget {
   const _OrderTile({required this.order});
   final SavedOrder order;
 
   @override
-  Widget build(BuildContext context) {
-    final fmt = DateFormat('MMM dd, hh:mm a');
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fmt = DateFormat('hh:mm a');
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Opacity(
       opacity: order.isCancelled ? 0.7 : 1.0,
       child: Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
+        ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () {
-            _showOrderDetails(context, order);
-          },
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _showOrderDetails(context, order),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Top Row: Order ID + Actions
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      fmt.format(order.timestamp),
-                      style: Theme.of(context).textTheme.bodySmall,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '#${order.id.substring(order.id.length - 6).toUpperCase()}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: cs.onSurfaceVariant,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
                     ),
-                    if (order.isCancelled)
-                      const _CancelledBadge()
-                    else
-                      _StatusChip(status: order.paymentStatus),
+                    const Spacer(),
+                    _OrderPopupMenu(order: order),
                   ],
                 ),
                 const SizedBox(height: 8),
+
+                // Customer Info
+                Text(
+                  order.customerName ?? 'Guest Customer',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.2,
+                      ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+
+                // Items Summary
                 Text(
                   order.lines.map((l) => '${l.qty}x ${l.item.name}').join(', '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.6),
+                      ),
                 ),
+
                 if (order.isCancelled && order.cancellationReason != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    'Reason: ${CancellationReason.fromString(order.cancellationReason)?.displayName ?? order.cancellationReason}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.red.shade700,
-                      fontStyle: FontStyle.italic,
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'Reason: ${CancellationReason.fromString(order.cancellationReason)?.displayName ?? order.cancellationReason}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.red.shade700,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ),
                 ],
-                const SizedBox(height: 4),
+
+                const SizedBox(height: 12),
+
+                // Bottom Row: Amount + Info (left), Status (right)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(
-                      '${order.paymentMethod.name.toUpperCase()} • ${order.deviceName}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: cs.onSurface.withValues(alpha: 0.6),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Rs. ${formatRupeesFromPaise(order.totalPaise)}',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  color: order.isCancelled ? cs.outline : cs.primary,
+                                  fontWeight: FontWeight.w900,
+                                  decoration: order.isCancelled ? TextDecoration.lineThrough : null,
+                                ),
                           ),
-                    ),
-                    Text(
-                      'Rs. ${formatRupeesFromPaise(order.totalPaise)}',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: order.isCancelled ? cs.outline : cs.primary,
-                            fontWeight: FontWeight.bold,
-                            decoration: order.isCancelled ? TextDecoration.lineThrough : null,
+                          const SizedBox(height: 2),
+                          Text(
+                            '${order.paymentMethod.name.toUpperCase()} • ${fmt.format(order.timestamp)}',
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.5),
+                                  letterSpacing: 0.3,
+                                ),
                           ),
+                        ],
+                      ),
                     ),
+                    _OrderStatusChip(order: order),
                   ],
                 ),
               ],
@@ -175,54 +230,166 @@ class _OrderTile extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _OrderDetailsSheet(order: order),
-    );
-  }
-}
-
-class _CancelledBadge extends StatelessWidget {
-  const _CancelledBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: const Text(
-        'CANCELLED',
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: Colors.red,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
+        child: _OrderDetailsSheet(order: order),
       ),
     );
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-  final PaymentStatus status;
+class _OrderPopupMenu extends ConsumerWidget {
+  const _OrderPopupMenu({required this.order});
+  final SavedOrder order;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+
+    return PopupMenuButton<String>(
+      padding: EdgeInsets.zero,
+      icon: Icon(Icons.more_vert, color: cs.onSurfaceVariant),
+      onSelected: (value) async {
+        switch (value) {
+          case 'edit':
+            ref.read(orderControllerProvider.notifier).editOrder(order);
+            context.go('/dashboard');
+            break;
+          case 'cancel':
+            showDialog(
+              context: context,
+              builder: (context) => CancellationDialog(order: order),
+            );
+            break;
+          case 'repeat':
+            ref.read(orderControllerProvider.notifier).repeatOrder(order);
+            context.go('/dashboard');
+            ref.read(toastServiceProvider).showSuccess(context, 'Items added to current order');
+            break;
+          case 'share':
+            final text = _generateShareText(order);
+            await Share.share(text, subject: 'Invoice for Order #${order.id.substring(order.id.length - 6).toUpperCase()}');
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        if (order.isEditable)
+          const PopupMenuItem(
+            value: 'edit',
+            child: Row(
+              children: [
+                Icon(Icons.edit_rounded, size: 18),
+                SizedBox(width: 12),
+                Text('Edit Order'),
+              ],
+            ),
+          ),
+        if (order.isEditable)
+          const PopupMenuItem(
+            value: 'cancel',
+            child: Row(
+              children: [
+                Icon(Icons.cancel_rounded, size: 18, color: Colors.red),
+                SizedBox(width: 12),
+                Text('Cancel Order', style: TextStyle(color: Colors.red)),
+              ],
+            ),
+          ),
+        const PopupMenuItem(
+          value: 'repeat',
+          child: Row(
+            children: [
+              Icon(Icons.repeat_rounded, size: 18),
+              SizedBox(width: 12),
+              Text('Repeat Order'),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'share',
+          child: Row(
+            children: [
+              Icon(Icons.share_rounded, size: 18),
+              SizedBox(width: 12),
+              Text('Share Invoice'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _generateShareText(SavedOrder order) {
+    final buffer = StringBuffer();
+    buffer.writeln('Order Receipt');
+    buffer.writeln('Order ID: #${order.id.substring(order.id.length - 6).toUpperCase()}');
+    buffer.writeln('Date: ${DateFormat('MMM dd, yyyy hh:mm a').format(order.timestamp)}');
+    buffer.writeln('--------------------------');
+    for (final line in order.lines) {
+      buffer.writeln('${line.qty}x ${line.item.name} - Rs. ${formatRupeesFromPaise(line.lineTotalPaise)}');
+    }
+    buffer.writeln('--------------------------');
+    if (order.discountPaise > 0) {
+      buffer.writeln('Discount: -Rs. ${formatRupeesFromPaise(order.discountPaise)}');
+    }
+    buffer.writeln('Total Amount: Rs. ${formatRupeesFromPaise(order.totalPaise)}');
+    buffer.writeln('Payment: ${order.paymentMethod.name.toUpperCase()} (${order.paymentStatus.name.toUpperCase()})');
+    buffer.writeln('--------------------------');
+    buffer.writeln('Thank you for your business!');
+    return buffer.toString();
+  }
+}
+
+class _OrderStatusChip extends StatelessWidget {
+  const _OrderStatusChip({required this.order});
+  final SavedOrder order;
 
   @override
   Widget build(BuildContext context) {
-    final isPaid = status == PaymentStatus.paid;
+    Color color;
+    String label;
+    IconData icon;
+
+    if (order.isCancelled || order.status == OrderStatus.refunded) {
+      color = Colors.red;
+      label = 'CANCELLED';
+      icon = Icons.cancel_rounded;
+    } else if (order.paymentStatus == PaymentStatus.paid || order.status == OrderStatus.completed || order.status == OrderStatus.served) {
+      color = Colors.green;
+      label = 'COMPLETED';
+      icon = Icons.check_circle_rounded;
+    } else {
+      color = Colors.orange;
+      label = 'PENDING';
+      icon = Icons.pending_rounded;
+    }
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isPaid ? Colors.green.withValues(alpha: 0.2) : Colors.orange.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(8),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
       ),
-      child: Text(
-        status.name.toUpperCase(),
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: isPaid ? Colors.green : Colors.orange,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: color,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -236,211 +403,344 @@ class _OrderDetailsSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final business = ref.watch(currentBusinessProvider).value;
+    final dateFmt = DateFormat('MMM dd, yyyy • hh:mm a');
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.of(context).viewInsets.bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (business != null) ...[
-            Center(
-              child: Column(
-                children: [
-                  Text(business.businessName.toUpperCase(),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                  if (business.address != null)
-                    Text(business.address!,
-                        textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
-                  if (business.isGstRegistered)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text('GSTIN: ${business.gstNumber}',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    ),
-                  const SizedBox(height: 8),
-                  const Divider(),
-                ],
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            // Drag Handle
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: cs.onSurfaceVariant.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ],
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Order Details', style: Theme.of(context).textTheme.headlineSmall),
-              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
-            ],
-          ),
-          const Divider(),
-          if (order.customerName != null || order.customerPhone != null) ...[
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
-              ),
+
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 16, 12),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    backgroundColor: cs.primaryContainer,
-                    radius: 16,
-                    child: Icon(Icons.person_outline, size: 16, color: cs.onPrimaryContainer),
-                  ),
-                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (order.customerName != null && order.customerName!.isNotEmpty)
-                          Text(
-                            order.customerName!,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                        if (order.customerPhone != null && order.customerPhone!.isNotEmpty)
-                          Text(
-                            order.customerPhone!,
-                            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
-                          ),
+                        Text(
+                          'Order Details',
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: -0.5,
+                              ),
+                        ),
+                        Text(
+                          '#${order.id.toUpperCase()}',
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                color: cs.onSurfaceVariant,
+                                letterSpacing: 1,
+                              ),
+                        ),
                       ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                    style: IconButton.styleFrom(
+                      backgroundColor: cs.surfaceContainerHighest,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 8),
-          ],
-          const SizedBox(height: 16),
-          if (order.isCancelled) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            const Divider(height: 1),
+
+            // Content
+            Expanded(
+              child: ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.all(24),
                 children: [
-                  const Row(
+                  // Business & Timestamp Info
+                  if (business != null) ...[
+                    Text(
+                      business.businessName.toUpperCase(),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                            color: cs.primary,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                  Text(
+                    dateFmt.format(order.timestamp),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Status Badge Section
+                  Row(
                     children: [
-                      Icon(Icons.cancel, color: Colors.red, size: 20),
-                      SizedBox(width: 8),
-                      Text('ORDER CANCELLED',
-                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                      _OrderStatusChip(order: order),
+                      const Spacer(),
+                      if (!order.isCancelled)
+                        TextButton.icon(
+                          onPressed: () {
+                            ref.read(orderControllerProvider.notifier).editOrder(order);
+                            Navigator.pop(context);
+                            context.go('/dashboard');
+                          },
+                          icon: const Icon(Icons.edit_rounded, size: 18),
+                          label: const Text('Edit'),
+                          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                        ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  if (order.cancellationReason != null)
-                    Text(
-                      'Reason: ${CancellationReason.fromString(order.cancellationReason)?.displayName ?? order.cancellationReason}',
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                  if (order.cancelledAt != null)
-                    Text(
-                      'At: ${DateFormat('MMM dd, hh:mm a').format(order.cancelledAt!)}',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  if (order.refundRequired)
+                  const SizedBox(height: 24),
+
+                  // Customer Section
+                  if (order.customerName != null || order.customerPhone != null) ...[
+                    _SectionHeader(title: 'CUSTOMER'),
+                    const SizedBox(height: 12),
                     Container(
-                      margin: const EdgeInsets.only(top: 8),
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.amber.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(4),
+                        color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 16),
-                          SizedBox(width: 4),
+                          CircleAvatar(
+                            backgroundColor: cs.primaryContainer,
+                            radius: 20,
+                            child: Icon(Icons.person_rounded, size: 20, color: cs.onPrimaryContainer),
+                          ),
+                          const SizedBox(width: 16),
                           Expanded(
-                            child: Text(
-                              'Refund may be required',
-                              style: TextStyle(fontSize: 11, color: Colors.brown, fontWeight: FontWeight.bold),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  order.customerName ?? 'No Name Provided',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
+                                if (order.customerPhone != null)
+                                  Text(
+                                    order.customerPhone!,
+                                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                                  ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
+                    const SizedBox(height: 32),
+                  ],
+
+                  // Cancellation Info
+                  if (order.isCancelled) ...[
+                    _SectionHeader(title: 'CANCELLATION INFO'),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.error_outline_rounded, color: Colors.red, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                CancellationReason.fromString(order.cancellationReason)?.displayName ?? 
+                                order.cancellationReason ?? 'Reason not specified',
+                                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          if (order.cancelledAt != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Cancelled on: ${dateFmt.format(order.cancelledAt!)}',
+                              style: const TextStyle(fontSize: 12, color: Colors.red),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+
+                  // Order Items Section
+                  _SectionHeader(title: 'ITEMS'),
+                  const SizedBox(height: 12),
+                  ...order.lines.map((l) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: cs.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '${l.qty}x',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                l.item.name,
+                                style: const TextStyle(fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                            Text(
+                              'Rs. ${formatRupeesFromPaise(l.lineTotalPaise)}',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      )),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Divider(),
+                  ),
+
+                  // Summary Section
+                  _SummaryRow(
+                    label: 'Subtotal',
+                    value: 'Rs. ${formatRupeesFromPaise(order.subtotalPaise)}',
+                  ),
+                  if (order.discountPaise > 0)
+                    _SummaryRow(
+                      label: 'Discount (${order.discountType.name})',
+                      value: '-Rs. ${formatRupeesFromPaise(order.discountPaise)}',
+                      valueColor: Colors.red,
+                    ),
+                  const SizedBox(height: 8),
+                  _SummaryRow(
+                    label: 'Total',
+                    value: 'Rs. ${formatRupeesFromPaise(order.totalPaise)}',
+                    isBold: true,
+                    fontSize: 20,
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Payment Info Info
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.payment_rounded, size: 14, color: cs.onSurfaceVariant),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Paid via ${order.paymentMethod.name.toUpperCase()}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
           ],
-          ...order.lines.map((l) => Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('${l.qty}x ${l.item.name}'),
-                Text('Rs. ${formatRupeesFromPaise(l.lineTotalPaise)}'),
-              ],
-            ),
-          )),
-          const SizedBox(height: 16),
-          if (order.discountPaise > 0) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Discount (${order.discountType.name})'),
-                Text('-Rs. ${formatRupeesFromPaise(order.discountPaise)}', style: const TextStyle(color: Colors.red)),
-              ],
-            ),
-            const SizedBox(height: 8),
-          ],
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Total', style: TextStyle(fontWeight: FontWeight.bold)),
-              Text('Rs. ${formatRupeesFromPaise(order.totalPaise)}', style: TextStyle(fontWeight: FontWeight.bold, color: cs.primary, fontSize: 18)),
-            ],
-          ),
-          const SizedBox(height: 32),
-          if (order.isCancelled)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  'This order is read-only because it was cancelled.',
-                  style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
-                ),
-              ),
-            )
-          else ...[
-            FilledButton.icon(
-              onPressed: () {
-                ref.read(orderControllerProvider.notifier).editOrder(order);
-                Navigator.pop(context);
-                context.go('/dashboard');
-              },
-              icon: const Icon(Icons.edit),
-              label: const Text('Edit Order'),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                _showCancellationDialog(context, ref, order);
-              },
-              icon: const Icon(Icons.cancel_outlined),
-              label: const Text('Cancel Order'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: const BorderSide(color: Colors.red),
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-        ],
+        );
+      },
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w900,
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+        letterSpacing: 1.5,
       ),
     );
   }
+}
 
-  void _showCancellationDialog(BuildContext context, WidgetRef ref, SavedOrder order) {
-    showDialog(
-      context: context,
-      builder: (context) => CancellationDialog(order: order),
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({
+    required this.label,
+    required this.value,
+    this.isBold = false,
+    this.fontSize = 14,
+    this.valueColor,
+  });
+
+  final String label;
+  final String value;
+  final bool isBold;
+  final double fontSize;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: isBold ? FontWeight.w900 : FontWeight.w500,
+              color: isBold ? null : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: isBold ? FontWeight.w900 : FontWeight.bold,
+              color: valueColor ?? (isBold ? Theme.of(context).colorScheme.primary : null),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
