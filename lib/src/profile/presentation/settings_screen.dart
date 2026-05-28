@@ -89,27 +89,6 @@ class _BusinessHoursSection extends ConsumerWidget {
                         value: business.manualOverride,
                         onChanged: (val) => service.toggleManualOverride(business, val),
                       ),
-                      if (business.manualOverride)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8.0),
-                          child: SegmentedButton<String>(
-                            segments: const [
-                              ButtonSegment(
-                                value: 'open',
-                                label: Text('OPEN'),
-                                icon: Icon(Icons.door_front_door),
-                              ),
-                              ButtonSegment(
-                                value: 'closed',
-                                label: Text('CLOSED'),
-                                icon: Icon(Icons.lock),
-                              ),
-                            ],
-                            selected: {business.businessStatus},
-                            onSelectionChanged: (val) =>
-                                service.setBusinessStatus(business, val.first),
-                          ),
-                        ),
                     ],
                   ),
                 ),

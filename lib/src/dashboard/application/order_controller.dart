@@ -128,6 +128,16 @@ class OrderController extends Notifier<OrderControllerState> {
     state = state.copyWith(draft: state.draft.copyWith(splitLines: lines));
   }
 
+  void setCustomerDetails({String? name, String? phone, String? customerId, bool clearId = false}) {
+    state = state.copyWith(
+      draft: state.draft.copyWith(
+        customerName: name ?? state.draft.customerName,
+        customerPhone: phone ?? state.draft.customerPhone,
+        customerId: clearId ? null : (customerId ?? state.draft.customerId),
+      ),
+    );
+  }
+
   Future<void> submit() async {
     final repo = await ref.read(orderRepositoryProvider.future);
     if (repo == null) {
@@ -143,6 +153,9 @@ class OrderController extends Notifier<OrderControllerState> {
         paymentMethod: state.draft.paymentMethod,
         paymentStatus: state.draft.paymentStatus,
         splitLines: state.draft.splitLines,
+        customerName: state.draft.customerName,
+        customerPhone: state.draft.customerPhone,
+        customerId: state.draft.customerId,
       );
       await repo.updateOrder(state.originalOrder!, updated);
 

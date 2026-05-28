@@ -99,7 +99,7 @@ class StaffRepository {
             appVersion: '1.0.0',
             platform: 'mobile',
           );
-          final logData = _activityLogRepo!.buildActivityLogBatchData(logEntry);
+          final logData = _activityLogRepo.buildActivityLogBatchData(logEntry);
           tx.set(logData.ref, logData.data);
         }
         
@@ -197,7 +197,7 @@ class StaffRepository {
             appVersion: '1.0.0',
             platform: 'mobile',
           );
-          final logData = _activityLogRepo!.buildActivityLogBatchData(logEntry);
+          final logData = _activityLogRepo.buildActivityLogBatchData(logEntry);
           tx.set(logData.ref, logData.data);
         }
 

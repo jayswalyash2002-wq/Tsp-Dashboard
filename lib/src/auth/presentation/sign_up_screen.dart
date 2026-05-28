@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../data/auth_providers.dart';
 import '../../core/firebase/firebase_providers.dart';
@@ -59,20 +58,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     super.dispose();
   }
 
-  bool get _isFormValid {
-    final name = _nameController.text.trim();
-    final phone = _phoneController.text.trim();
-    final email = _emailController.text.trim();
-    final p = _passwordController.text;
-    final cp = _confirmPasswordController.text;
-
-    if (name.isEmpty) return false;
-    if (phone.length < 10) return false;
-    if (email.isEmpty || !email.contains('@')) return false;
-    if (p != cp) return false;
-
-    return PasswordValidator.validate(p).isValid;
-  }
 
   bool get _needsVerification {
     final user = ref.read(firebaseAuthProvider).currentUser;

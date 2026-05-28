@@ -87,8 +87,8 @@ class OrderChip extends ConsumerWidget {
           const SizedBox(width: 12),
           
           // 3. Line Total
-          SizedBox(
-            width: 70,
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
             child: Text(
               'Rs.${(line.lineTotalPaise / 100).toStringAsFixed(0)}',
               textAlign: TextAlign.right,
@@ -141,15 +141,22 @@ class CompactSelect<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<T>(
-      initialValue: value,
+      value: value,
+      isExpanded: true,
       decoration: InputDecoration(
         labelText: label,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
       items: items.entries
-          .map((e) => DropdownMenuItem<T>(value: e.key, child: Text(e.value)))
+          .map((e) => DropdownMenuItem<T>(
+                value: e.key,
+                child: Text(
+                  e.value,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ))
           .toList(growable: false),
       onChanged: onChanged,
     );

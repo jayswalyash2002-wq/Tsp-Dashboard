@@ -10,6 +10,7 @@ import '../../activity_log/presentation/providers/activity_log_providers.dart';
 import '../../activity_log/domain/entities/activity_log_enums.dart';
 import '../../activity_log/data/models/activity_log_model.dart';
 import '../../core/device/device_providers.dart';
+import '../../core/widgets/responsive_widgets.dart';
 import 'package:flutter/foundation.dart';
 
 class BusinessSetupScreen extends ConsumerStatefulWidget {
@@ -194,6 +195,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
     if (user == null) {
       // Unauthenticated flow: Store details and go to Sign Up
       ref.read(pendingBusinessProvider.notifier).state = businessData;
+      // ignore: use_build_context_synchronously
       context.push('/auth/signup');
       return;
     }
@@ -364,63 +366,73 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 key: ValueKey(_selectedType),
-                initialValue: _selectedType,
+                isExpanded: true,
+                value: _selectedType,
                 decoration: const InputDecoration(
                   labelText: 'Business Type*',
                   border: OutlineInputBorder(),
                 ),
                 items: _businessTypes
                     .map((type) =>
-                        DropdownMenuItem(value: type, child: Text(type)))
+                        DropdownMenuItem(
+                          value: type, 
+                          child: Text(type, overflow: TextOverflow.ellipsis),
+                        ))
                     .toList(),
                 onChanged: (value) => setState(() => _selectedType = value),
                 validator: (v) => v == null ? 'Required' : null,
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _phoneController,
-                decoration: const InputDecoration(
-                  labelText: 'Primary Business Phone*',
-                  hintText: '10-digit number',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.phone,
-                validator: (v) =>
-                    v == null || v.length < 10 ? 'Enter valid phone' : null,
+              ResponsiveFormRow(
+                children: [
+                  TextFormField(
+                    controller: _phoneController,
+                    decoration: const InputDecoration(
+                      labelText: 'Primary Business Phone*',
+                      hintText: '10-digit number',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    validator: (v) =>
+                        v == null || v.length < 10 ? 'Enter valid phone' : null,
+                  ),
+                  TextFormField(
+                    controller: _secondaryPhoneController,
+                    decoration: const InputDecoration(
+                      labelText: 'Secondary Number (Optional)',
+                      hintText: '10-digit number',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    validator: (v) {
+                      if (v != null && v.isNotEmpty && v.length < 10) {
+                        return 'Enter valid phone';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _secondaryPhoneController,
-                decoration: const InputDecoration(
-                  labelText: 'Secondary Number (Optional)',
-                  hintText: '10-digit number',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.phone,
-                validator: (v) {
-                  if (v != null && v.isNotEmpty && v.length < 10) {
-                    return 'Enter valid phone';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _cityController,
-                decoration: const InputDecoration(
-                  labelText: 'City*',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _areaController,
-                decoration: const InputDecoration(
-                  labelText: 'Area / Locality*',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+              ResponsiveFormRow(
+                children: [
+                  TextFormField(
+                    controller: _cityController,
+                    decoration: const InputDecoration(
+                      labelText: 'City*',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                  ),
+                  TextFormField(
+                    controller: _areaController,
+                    decoration: const InputDecoration(
+                      labelText: 'Area / Locality*',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               TextFormField(

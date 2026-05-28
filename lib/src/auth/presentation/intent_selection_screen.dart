@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/firebase/firebase_providers.dart';
-import '../../memberships/presentation/join_business_placeholder_screen.dart';
 
 class IntentSelectionScreen extends ConsumerWidget {
   const IntentSelectionScreen({super.key});

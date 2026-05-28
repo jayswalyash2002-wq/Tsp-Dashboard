@@ -122,7 +122,8 @@ class _EditStaffScreenState extends ConsumerState<EditStaffScreen> {
                   Text(widget.staff.email, style: TextStyle(color: cs.onSurfaceVariant)),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<RoleType>(
-                    initialValue: _selectedRole,
+                    isExpanded: true,
+                    value: _selectedRole,
                     decoration: const InputDecoration(labelText: 'Base Role'),
                     items: RoleType.values.map((role) {
                       // Only owners can promote others to owner
@@ -130,12 +131,12 @@ class _EditStaffScreenState extends ConsumerState<EditStaffScreen> {
                         return const DropdownMenuItem(
                           value: RoleType.owner,
                           enabled: false,
-                          child: Text('OWNER (Owner only)'),
+                          child: Text('OWNER (Owner only)', overflow: TextOverflow.ellipsis),
                         );
                       }
                       return DropdownMenuItem(
                         value: role,
-                        child: Text(role.name.toUpperCase()),
+                        child: Text(role.name.toUpperCase(), overflow: TextOverflow.ellipsis),
                       );
                     }).toList(),
                     onChanged: _isSaving ? null : _onRoleChanged,

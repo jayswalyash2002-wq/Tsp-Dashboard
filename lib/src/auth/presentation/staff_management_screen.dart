@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:tsp_dashboard/src/constants/roles.dart';
 import 'package:tsp_dashboard/src/features/rbac/domain/models/business_invite.dart';
 import 'package:tsp_dashboard/src/features/staff/providers/staff_providers.dart';
 import '../../core/rbac/role.dart' as rbac;
@@ -13,6 +12,7 @@ import '../../memberships/data/membership_providers.dart';
 import '../../memberships/domain/membership.dart';
 import '../data/auth_providers.dart';
 import '../domain/app_user.dart';
+import '../../core/widgets/responsive_widgets.dart';
 
 class StaffManagementScreen extends ConsumerStatefulWidget {
   const StaffManagementScreen({super.key});
@@ -265,7 +265,6 @@ class _RoleBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     Color color;
     switch (role) {
       case rbac.RoleType.owner:
@@ -436,48 +435,47 @@ class _InviteDetailSheet extends ConsumerWidget {
             valueColor: invite.isUsed ? Colors.green : (isExpired ? Colors.red : Colors.amber),
           ),
           const SizedBox(height: 32),
-          Row(
+          ResponsiveFormRow(
+            spacing: 12,
             children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: invite.code));
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
-                  },
-                  icon: const Icon(Icons.copy),
-                  label: const Text('Copy'),
-                ),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: invite.code));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
+                },
+                icon: const Icon(Icons.copy),
+                label: const Text('Copy'),
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Share.share('Join our team at TSP Dashboard!\nCode: ${invite.code}');
-                  },
-                  icon: const Icon(Icons.share),
-                  label: const Text('Share'),
-                ),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Share.share('Join our team at TSP Dashboard!\nCode: ${invite.code}');
+                },
+                icon: const Icon(Icons.share),
+                label: const Text('Share'),
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          ResponsiveFormRow(
+            spacing: 12,
             children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => _showQrDialog(context, invite),
-                  icon: const Icon(Icons.qr_code),
-                  label: const Text('Generate QR'),
-                ),
+              FilledButton.icon(
+                onPressed: () => _showQrDialog(context, invite),
+                icon: const Icon(Icons.qr_code),
+                label: const Text('Generate QR'),
+                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
               ),
-              const SizedBox(width: 12),
               if (!invite.isUsed)
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => _confirmRevoke(context, ref),
-                    icon: const Icon(Icons.delete_outline),
-                    label: const Text('Revoke'),
-                    style: FilledButton.styleFrom(backgroundColor: cs.error, foregroundColor: cs.onError),
+                FilledButton.icon(
+                  onPressed: () => _confirmRevoke(context, ref),
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Revoke'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: cs.error, 
+                    foregroundColor: cs.onError,
+                    minimumSize: const Size.fromHeight(48),
                   ),
                 ),
             ],
@@ -575,12 +573,18 @@ class _DetailRow extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontFamily: isMonospace ? 'monospace' : null,
-              color: valueColor,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontFamily: isMonospace ? 'monospace' : null,
+                color: valueColor,
+              ),
             ),
           ),
         ],

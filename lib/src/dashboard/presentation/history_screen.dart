@@ -272,6 +272,45 @@ class _OrderDetailsSheet extends ConsumerWidget {
             ],
           ),
           const Divider(),
+          if (order.customerName != null || order.customerPhone != null) ...[
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: cs.primaryContainer,
+                    radius: 16,
+                    child: Icon(Icons.person_outline, size: 16, color: cs.onPrimaryContainer),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (order.customerName != null && order.customerName!.isNotEmpty)
+                          Text(
+                            order.customerName!,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                        if (order.customerPhone != null && order.customerPhone!.isNotEmpty)
+                          Text(
+                            order.customerPhone!,
+                            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           const SizedBox(height: 16),
           if (order.isCancelled) ...[
             Container(

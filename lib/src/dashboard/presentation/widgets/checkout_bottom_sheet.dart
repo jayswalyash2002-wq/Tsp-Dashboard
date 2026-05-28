@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tsp_dashboard/src/dashboard/application/order_controller.dart';
@@ -8,6 +9,9 @@ import '../../../core/rbac/permission.dart';
 import '../../../core/rbac/permission_gate.dart';
 import '../../../business/data/business_providers.dart';
 import '../../../core/utils/toast_service.dart';
+import '../../../core/widgets/responsive_widgets.dart';
+import '../../../customers/data/customer_providers.dart';
+import '../../../customers/domain/customer.dart';
 
 class CheckoutBottomSheet extends ConsumerStatefulWidget {
   const CheckoutBottomSheet({super.key});
@@ -17,6 +21,43 @@ class CheckoutBottomSheet extends ConsumerStatefulWidget {
 }
 
 class _CheckoutBottomSheetState extends ConsumerState<CheckoutBottomSheet> {
+  late TextEditingController _nameController;
+  late TextEditingController _phoneController;
+  final FocusNode _phoneFocusNode = FocusNode();
+  Timer? _debounce;
+  String _searchPhone = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final draft = ref.read(orderControllerProvider).draft;
+    _nameController = TextEditingController(text: draft.customerName);
+    _phoneController = TextEditingController(text: draft.customerPhone);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _phoneFocusNode.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _onPhoneChanged(String phone) {
+    ref.read(orderControllerProvider.notifier).setCustomerDetails(phone: phone, clearId: true);
+    
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      final normalized = phone.replaceAll(RegExp(r'[^0-9]'), '');
+      if (normalized.length >= 10) {
+        setState(() => _searchPhone = normalized);
+      } else {
+        setState(() => _searchPhone = '');
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final orderState = ref.watch(orderControllerProvider);
@@ -25,6 +66,27 @@ class _CheckoutBottomSheetState extends ConsumerState<CheckoutBottomSheet> {
     final cs = Theme.of(context).colorScheme;
     final business = ref.watch(currentBusinessProvider).value;
     final isClosed = business != null && business.businessStatus == 'closed';
+
+    // Automatic customer lookup
+    if (_searchPhone.isNotEmpty) {
+      ref.listen(customerSearchProvider(_searchPhone), (prev, next) {
+        next.whenData((customer) {
+          if (customer != null) {
+            ref.read(orderControllerProvider.notifier).setCustomerDetails(
+              customerId: customer.id,
+              name: _nameController.text.trim().isEmpty ? customer.name : null,
+            );
+            if (_nameController.text.trim().isEmpty && customer.name != null) {
+              _nameController.text = customer.name!;
+            }
+          }
+        });
+      });
+    }
+
+    final customerAsync = _searchPhone.isNotEmpty 
+        ? ref.watch(customerSearchProvider(_searchPhone))
+        : const AsyncValue<Customer?>.data(null);
 
     return DraggableScrollableSheet(
       initialChildSize: 0.85, // increased initial size for better visibility
@@ -62,6 +124,8 @@ class _CheckoutBottomSheetState extends ConsumerState<CheckoutBottomSheet> {
                         children: [
                           Text(
                             orderState.isEditing ? 'Edit Order' : 'Current Order',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: -0.5,
@@ -69,6 +133,8 @@ class _CheckoutBottomSheetState extends ConsumerState<CheckoutBottomSheet> {
                           ),
                           Text(
                             '${draft.lines.length} ${draft.lines.length == 1 ? 'item' : 'items'} selected',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                   color: cs.onSurface.withValues(alpha: 0.6),
                                   fontWeight: FontWeight.w500,
@@ -105,7 +171,92 @@ class _CheckoutBottomSheetState extends ConsumerState<CheckoutBottomSheet> {
                       // A. Order items list
                       ...draft.lines.map((line) => OrderChip(line: line, isReadOnly: isCancelled)),
                     ],
-                    const Divider(height: 48),
+                    const Divider(height: 32),
+
+                    // Customer Details
+                    Theme(
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        title: Text(
+                          'CUSTOMER DETAILS (OPTIONAL)',
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: cs.onSurface.withValues(alpha: 0.5),
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.2,
+                              ),
+                        ),
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: const EdgeInsets.only(bottom: 16),
+                        initiallyExpanded: draft.customerName != null || draft.customerPhone != null,
+                        children: [
+                          if (customerAsync.value != null)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
+                              child: _ReturningCustomerBadge(customer: customerAsync.value!),
+                            ),
+                          ResponsiveFormRow(
+                            children: [
+                              TextFormField(
+                                controller: _nameController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Customer Name',
+                                  prefixIcon: Icon(Icons.person_outline),
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                                onChanged: (v) => ref.read(orderControllerProvider.notifier).setCustomerDetails(name: v),
+                                textCapitalization: TextCapitalization.words,
+                                enabled: !isCancelled,
+                              ),
+                              RawAutocomplete<Customer>(
+                                textEditingController: _phoneController,
+                                focusNode: _phoneFocusNode,
+                                optionsBuilder: (TextEditingValue textEditingValue) async {
+                                  final text = textEditingValue.text.trim();
+                                  if (text.length < 3) return const Iterable<Customer>.empty();
+                                  final repo = ref.read(customerRepositoryProvider);
+                                  return await repo?.searchCustomers(text) ?? [];
+                                },
+                                displayStringForOption: (Customer option) => option.phone,
+                                onSelected: (Customer selection) {
+                                  _nameController.text = selection.name ?? '';
+                                  _phoneController.text = selection.phone;
+                                  ref.read(orderControllerProvider.notifier).setCustomerDetails(
+                                        customerId: selection.id,
+                                        name: selection.name,
+                                        phone: selection.phone,
+                                      );
+                                  setState(() => _searchPhone = selection.id);
+                                },
+                                fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                                  return TextFormField(
+                                    controller: controller,
+                                    focusNode: focusNode,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Phone Number',
+                                      prefixIcon: Icon(Icons.phone_outlined),
+                                      border: OutlineInputBorder(),
+                                      isDense: true,
+                                    ),
+                                    keyboardType: TextInputType.phone,
+                                    onChanged: _onPhoneChanged,
+                                    enabled: !isCancelled,
+                                    onFieldSubmitted: (value) => onFieldSubmitted(),
+                                  );
+                                },
+                                optionsViewBuilder: (context, onSelected, options) {
+                                  return _AutocompleteOptions(
+                                    options: options,
+                                    onSelected: onSelected,
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 32),
                     
                     // Billing & Payment Controls
                     Text(
@@ -117,50 +268,45 @@ class _CheckoutBottomSheetState extends ConsumerState<CheckoutBottomSheet> {
                           ),
                     ),
                     const SizedBox(height: 16),
-                    Row(
+                    ResponsiveFormRow(
                       children: [
-                        Expanded(
-                          child: CompactSelect<DiscountType>(
-                            label: 'Discount Type',
-                            value: draft.discountType,
-                            items: const {
-                              DiscountType.none: 'None',
-                              DiscountType.flat: 'Flat Rs.',
-                              DiscountType.percent: 'Percent %',
-                              DiscountType.complimentary: 'Complimentary',
-                            },
-                            onChanged: isCancelled
-                                ? null
-                                : (v) {
-                                    if (v == null) return;
-                                    ref.read(orderControllerProvider.notifier).setDiscountType(v);
-                                    if (v == DiscountType.flat || v == DiscountType.percent) {
-                                      _showDiscountValueDialog(context, ref, v);
-                                    }
-                                  },
-                          ),
+                        CompactSelect<DiscountType>(
+                          label: 'Discount Type',
+                          value: draft.discountType,
+                          items: const {
+                            DiscountType.none: 'None',
+                            DiscountType.flat: 'Flat Rs.',
+                            DiscountType.percent: 'Percent %',
+                            DiscountType.complimentary: 'Complimentary',
+                          },
+                          onChanged: isCancelled
+                              ? null
+                              : (v) {
+                                  if (v == null) return;
+                                  ref.read(orderControllerProvider.notifier).setDiscountType(v);
+                                  if (v == DiscountType.flat || v == DiscountType.percent) {
+                                    _showDiscountValueDialog(context, ref, v);
+                                  }
+                                },
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: CompactSelect<PaymentMethod>(
-                            label: 'Payment Method',
-                            value: draft.paymentMethod,
-                            items: const {
-                              PaymentMethod.cash: 'Cash',
-                              PaymentMethod.upi: 'Upi',
-                              PaymentMethod.card: 'Card',
-                              PaymentMethod.split: 'Split payment',
-                            },
-                            onChanged: isCancelled
-                                ? null
-                                : (v) {
-                                    if (v == null) return;
-                                    ref.read(orderControllerProvider.notifier).setPaymentMethod(v);
-                                    if (v == PaymentMethod.split) {
-                                      _showSplitPaymentDialog(context, ref, draft.totalPaise);
-                                    }
-                                  },
-                          ),
+                        CompactSelect<PaymentMethod>(
+                          label: 'Payment Method',
+                          value: draft.paymentMethod,
+                          items: const {
+                            PaymentMethod.cash: 'Cash',
+                            PaymentMethod.upi: 'Upi',
+                            PaymentMethod.card: 'Card',
+                            PaymentMethod.split: 'Split payment',
+                          },
+                          onChanged: isCancelled
+                              ? null
+                              : (v) {
+                                  if (v == null) return;
+                                  ref.read(orderControllerProvider.notifier).setPaymentMethod(v);
+                                  if (v == PaymentMethod.split) {
+                                    _showSplitPaymentDialog(context, ref, draft.totalPaise);
+                                  }
+                                },
                         ),
                       ],
                     ),
@@ -276,6 +422,7 @@ class _CheckoutBottomSheetState extends ConsumerState<CheckoutBottomSheet> {
                                         await ref.read(orderControllerProvider.notifier).submit();
                                         if (mounted) {
                                           ref.read(toastServiceProvider).showSuccess(context, 'Order completed successfully');
+                                          // ignore: use_build_context_synchronously
                                           Navigator.pop(context);
                                         }
                                       } catch (e) {
@@ -418,6 +565,83 @@ class _CheckoutBottomSheetState extends ConsumerState<CheckoutBottomSheet> {
   }
 }
 
+class _AutocompleteOptions extends StatelessWidget {
+  const _AutocompleteOptions({
+    required this.options,
+    required this.onSelected,
+  });
+
+  final Iterable<Customer> options;
+  final AutocompleteOnSelected<Customer> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Material(
+        elevation: 8.0,
+        borderRadius: BorderRadius.circular(12),
+        color: cs.surfaceContainerHigh,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 250, maxWidth: 350),
+          child: ListView.separated(
+            padding: EdgeInsets.zero,
+            shrinkWrap: true,
+            itemCount: options.length,
+            separatorBuilder: (context, index) => const Divider(height: 1),
+            itemBuilder: (BuildContext context, int index) {
+              final Customer option = options.elementAt(index);
+              return ListTile(
+                title: Text(
+                  option.name ?? 'Unknown Customer',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(option.phone),
+                trailing: Icon(Icons.history, size: 16, color: cs.onSurfaceVariant),
+                onTap: () => onSelected(option),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReturningCustomerBadge extends StatelessWidget {
+  const _ReturningCustomerBadge({required this.customer});
+  final Customer customer;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.verified_outlined, color: cs.primary, size: 16),
+          const SizedBox(width: 8),
+          Text(
+            'Returning Customer: ${customer.totalOrders} ${customer.totalOrders == 1 ? 'order' : 'orders'}',
+            style: TextStyle(
+              color: cs.primary,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SummaryRow extends StatelessWidget {
   const _SummaryRow({
     required this.label,
@@ -441,16 +665,23 @@ class _SummaryRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: isTotal ? 18 : 14,
-              fontWeight: isTotal ? FontWeight.w900 : FontWeight.w500,
-              color: isTotal ? cs.onSurface : cs.onSurface.withValues(alpha: 0.6),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: isTotal ? 18 : 14,
+                fontWeight: isTotal ? FontWeight.w900 : FontWeight.w500,
+                color: isTotal ? cs.onSurface : cs.onSurface.withValues(alpha: 0.6),
+              ),
             ),
           ),
+          const SizedBox(width: 8),
           Text(
             value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: isTotal ? 20 : 15,
               fontWeight: isTotal || isBold ? FontWeight.w900 : FontWeight.w700,
@@ -482,13 +713,18 @@ class _CancelledInfo extends ConsumerWidget {
           ),
           child: Column(
             children: [
-              const Row(
+              Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.cancel, color: Colors.red, size: 24),
-                  SizedBox(width: 8),
-                  Text('ORDER CANCELLED',
-                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
+                  const Icon(Icons.cancel, color: Colors.red, size: 24),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'ORDER CANCELLED',
+                      style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
               if (order.cancellationReason != null)
@@ -497,6 +733,7 @@ class _CancelledInfo extends ConsumerWidget {
                   child: Text(
                     'Reason: ${CancellationReason.fromString(order.cancellationReason)?.displayName ?? order.cancellationReason}',
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               if (order.refundRequired)
@@ -512,9 +749,12 @@ class _CancelledInfo extends ConsumerWidget {
                     children: [
                       Icon(Icons.warning_amber_rounded, color: Colors.brown, size: 18),
                       SizedBox(width: 8),
-                      Text(
-                        'Refund Required',
-                        style: TextStyle(fontSize: 13, color: Colors.brown, fontWeight: FontWeight.bold),
+                      Flexible(
+                        child: Text(
+                          'Refund Required',
+                          style: TextStyle(fontSize: 13, color: Colors.brown, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),

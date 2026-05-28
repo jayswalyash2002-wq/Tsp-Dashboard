@@ -81,12 +81,29 @@ class _NormalCartBar extends ConsumerWidget {
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
-                child: Text(
-                  '$count ${count == 1 ? 'item' : 'items'}  ·  Rs. $total',
-                  key: ValueKey('cart_text_${count}_$total'),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                child: Column(
+                  key: ValueKey('cart_info_${count}_${total}_${draft.customerName}'),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$count ${count == 1 ? 'item' : 'items'}  ·  Rs. $total',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            height: 1.1,
+                          ),
+                    ),
+                    if (draft.customerName != null && draft.customerName!.isNotEmpty)
+                      Text(
+                        draft.customerName!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: cs.onSurface.withValues(alpha: 0.6),
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
+                  ],
                 ),
               ),
             ),

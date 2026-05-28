@@ -9,6 +9,7 @@ import '../../core/firebase/firebase_providers.dart';
 import '../../core/utils/business_date_utils.dart';
 import '../../dashboard/data/dashboard_providers.dart';
 import '../../business/data/business_providers.dart';
+import '../../business/application/business_service.dart';
 import '../../memberships/data/membership_providers.dart';
 import '../../core/rbac/permission.dart';
 import '../../core/rbac/permission_gate.dart';
@@ -298,72 +299,129 @@ class _BusinessStatusCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionAsync = ref.watch(currentSessionProvider);
+    final businessAsync = ref.watch(currentBusinessProvider);
+    final service = ref.watch(businessServiceProvider);
     final cs = Theme.of(context).colorScheme;
 
-    return sessionAsync.when(
-      data: (session) {
-        final isOpen = session?.isOpen ?? false;
-        final businessDate = session?.businessDate ??
-            BusinessDateUtils.formatBusinessDate(DateTime.now());
+    return businessAsync.when(
+      data: (business) {
+        if (business == null) return const SizedBox.shrink();
 
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
+        return sessionAsync.when(
+          data: (session) {
+            final isOpen = session?.isOpen ?? false;
+            final businessDate = session?.businessDate ??
+                BusinessDateUtils.formatBusinessDate(DateTime.now());
+            final isManual = business.manualOverride;
+
+            return Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: isOpen ? Colors.green : Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      isOpen ? 'Business Open' : 'Business Closed',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+                    Row(
+                      children: [
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: isOpen ? Colors.green : Colors.red,
+                            shape: BoxShape.circle,
                           ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          isOpen ? 'Business Open' : 'Business Closed',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          businessDate,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                     ),
-                    const Spacer(),
-                    Text(
-                      businessDate,
-                      style: Theme.of(context).textTheme.bodySmall,
+                    const SizedBox(height: 16),
+                    if (session != null) ...[
+                      if (session.openedAt != null)
+                        _InfoRow(
+                          label: 'Opened at',
+                          value: DateFormat('hh:mm a').format(session.openedAt!),
+                        ),
+                      if (session.closedAt != null && !isOpen)
+                        _InfoRow(
+                          label: 'Closed at',
+                          value: DateFormat('hh:mm a').format(session.closedAt!),
+                        ),
+                    ],
+                    if (!isManual) ...[
+                      const SizedBox(height: 8),
+                      _InfoRow(label: 'Auto Open', value: business.openingTime),
+                      _InfoRow(label: 'Auto Close', value: business.closingTime),
+                    ],
+                    const SizedBox(height: 16),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: Column(
+                        key: ValueKey('status_info_${isManual}_$isOpen'),
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            isManual
+                                ? (isOpen
+                                    ? 'Manually opened • Auto schedule paused'
+                                    : 'Manually closed • Auto schedule paused')
+                                : 'Managed automatically • Override available in Settings',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.4),
+                                ),
+                          ),
+                          if (isManual) ...[
+                            const SizedBox(height: 16),
+                            if (isOpen)
+                              FilledButton.icon(
+                                onPressed: () => service.closeBusiness(business),
+                                icon: const Icon(Icons.lock_outline),
+                                label: const Text('CLOSE BUSINESS'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                ),
+                              )
+                            else
+                              FilledButton.icon(
+                                onPressed: () => service.openBusiness(business),
+                                icon: const Icon(Icons.door_front_door_outlined),
+                                label: const Text('OPEN BUSINESS'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                          ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                if (session != null) ...[
-                  if (session.openedAt != null)
-                    _InfoRow(
-                      label: 'Opened at',
-                      value: DateFormat('hh:mm a').format(session.openedAt!),
-                    ),
-                  if (session.closedAt != null && !isOpen)
-                    _InfoRow(
-                      label: 'Closed at',
-                      value: DateFormat('hh:mm a').format(session.closedAt!),
-                    ),
-                ],
-                const SizedBox(height: 16),
-                Text(
-                  'Managed automatically • Override available in Settings',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.4),
-                      ),
-                ),
-              ],
+              ),
+            );
+          },
+          loading: () => const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(),
             ),
           ),
+          error: (e, _) => Text('Session error: $e'),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Text('Session error: $e'),
+      loading: () => const SizedBox.shrink(),
+      error: (e, _) => const SizedBox.shrink(),
     );
   }
 }

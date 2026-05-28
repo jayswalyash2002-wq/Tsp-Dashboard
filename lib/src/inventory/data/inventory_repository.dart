@@ -1,14 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../domain/inventory_item.dart';
 
 class InventoryRepository {
   final FirebaseFirestore _db;
-  final FirebaseAuth _auth;
   final String _businessId;
 
-  InventoryRepository(this._db, this._auth, this._businessId);
+  InventoryRepository(this._db, this._businessId);
 
   CollectionReference get _inventoryColl => 
       _db.collection('businesses').doc(_businessId).collection('inventoryItems');

@@ -7,6 +7,7 @@ import '../../activity_log/data/models/activity_log_model.dart';
 import '../../activity_log/domain/entities/activity_log_enums.dart';
 import '../../activity_log/domain/repositories/activity_log_repository.dart';
 import '../../auth/data/auth_repository.dart';
+import '../../customers/domain/customer.dart';
 import '../domain/order_models.dart';
 
 class OrderRepository {
@@ -62,6 +63,17 @@ class OrderRepository {
       // 1. PERFORM ALL READS FIRST
       final balancesSnap = await tx.get(balancesRef);
       
+      String? customerId;
+      if (draft.paymentStatus == PaymentStatus.paid) {
+        customerId = await _handleCustomerUpdate(
+          tx,
+          draft.customerPhone,
+          draft.customerName,
+          draft.totalPaise,
+          now,
+        );
+      }
+
       // 2. PERFORM ALL WRITES
       if (draft.paymentStatus == PaymentStatus.paid) {
         final data = balancesSnap.data() ?? {};
@@ -123,6 +135,9 @@ class OrderRepository {
           'status': draft.paymentStatus.name,
           'splitLines': [for (final s in draft.splitLines) s.toMap()],
         },
+        'customerName': draft.customerName,
+        'customerPhone': draft.customerPhone,
+        'customerId': customerId,
         'inventoryDeducted': false,
       });
     });
@@ -157,6 +172,47 @@ class OrderRepository {
       }
 
       final balancesSnap = await tx.get(balancesRef);
+
+      final now = DateTime.now();
+      String? customerId = newOrder.customerId;
+
+      // Handle customer stat updates if payment status changed or amount changed
+      if (newOrder.paymentStatus == PaymentStatus.paid) {
+        // If it was already paid, we adjust the spent amount if it changed
+        // If it was not paid, we add it as a new order for the customer
+        int spentAdjustment = newOrder.totalPaise;
+        int orderCountAdjustment = 1;
+
+        if (oldOrder.paymentStatus == PaymentStatus.paid) {
+          spentAdjustment = newOrder.totalPaise - oldOrder.totalPaise;
+          orderCountAdjustment = 0; // Already counted
+        }
+
+        // Check if customer changed
+        final oldNormalized = oldOrder.customerPhone?.trim().replaceAll(RegExp(r'[^0-9]'), '');
+        final newNormalized = newOrder.customerPhone?.trim().replaceAll(RegExp(r'[^0-9]'), '');
+
+        if (oldOrder.paymentStatus == PaymentStatus.paid && oldNormalized != newNormalized && oldNormalized != null) {
+          // Revert old customer stats
+          await _handleCustomerUpdate(tx, oldOrder.customerPhone, oldOrder.customerName, -oldOrder.totalPaise, now, countAdjustment: -1);
+          // Re-apply to new customer as a full new order
+          spentAdjustment = newOrder.totalPaise;
+          orderCountAdjustment = 1;
+        }
+
+        customerId = await _handleCustomerUpdate(
+          tx,
+          newOrder.customerPhone,
+          newOrder.customerName,
+          spentAdjustment,
+          now,
+          countAdjustment: orderCountAdjustment,
+        );
+      } else if (oldOrder.paymentStatus == PaymentStatus.paid) {
+        // Payment was reverted from Paid to Pending - revert customer stats
+        await _handleCustomerUpdate(tx, oldOrder.customerPhone, oldOrder.customerName, -oldOrder.totalPaise, now, countAdjustment: -1);
+        customerId = null;
+      }
 
       // 2. PERFORM ALL WRITES
       final data = balancesSnap.data() ?? {};
@@ -215,6 +271,9 @@ class OrderRepository {
           'status': newOrder.paymentStatus.name,
           'splitLines': [for (final s in newOrder.splitLines) s.toMap()],
         },
+        'customerName': newOrder.customerName,
+        'customerPhone': newOrder.customerPhone,
+        'customerId': customerId,
         'inventoryDeducted': newOrder.inventoryDeducted,
         'updatedAt': FieldValue.serverTimestamp(),
         'updatedBy': _auth.currentUser?.uid,
@@ -400,6 +459,54 @@ class OrderRepository {
         break;
     }
     return _Impact(cash, bank);
+  }
+
+  Future<String?> _handleCustomerUpdate(
+    Transaction tx,
+    String? phone,
+    String? name,
+    int spentAdjustment,
+    DateTime now, {
+    int countAdjustment = 0,
+  }) async {
+    if (phone == null || phone.trim().isEmpty) return null;
+
+    final normalizedPhone = phone.trim().replaceAll(RegExp(r'[^0-9]'), '');
+    if (normalizedPhone.isEmpty) return null;
+
+    final customerRef = _db
+        .collection('businesses')
+        .doc(_businessId)
+        .collection('customers')
+        .doc(normalizedPhone);
+
+    final customerSnap = await tx.get(customerRef);
+
+    if (customerSnap.exists) {
+      final customer = Customer.fromMap(customerSnap.id, customerSnap.data()!);
+      final updatedCustomer = customer.copyWith(
+        name: name?.trim().isNotEmpty == true ? name : customer.name,
+        totalOrders: (customer.totalOrders + countAdjustment).clamp(0, 9999999),
+        totalSpentPaise: (customer.totalSpentPaise + spentAdjustment).clamp(0, 999999999),
+        lastVisit: countAdjustment > 0 ? now : customer.lastVisit,
+        updatedAt: now,
+      );
+      tx.set(customerRef, updatedCustomer.toMap());
+    } else if (countAdjustment >= 0) {
+      final newCustomer = Customer(
+        id: normalizedPhone,
+        name: name?.trim().isNotEmpty == true ? name : null,
+        phone: normalizedPhone,
+        totalOrders: countAdjustment.clamp(0, 1),
+        totalSpentPaise: spentAdjustment.clamp(0, 999999999),
+        lastVisit: now,
+        createdAt: now,
+        updatedAt: now,
+      );
+      tx.set(customerRef, newCustomer.toMap());
+    }
+
+    return normalizedPhone;
   }
 }
 

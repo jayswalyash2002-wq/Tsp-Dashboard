@@ -9,7 +9,6 @@ final inventoryRepositoryProvider = Provider<InventoryRepository?>((ref) {
   if (businessId == null) return null;
   return InventoryRepository(
     ref.watch(firestoreProvider),
-    ref.watch(firebaseAuthProvider),
     businessId,
   );
 });

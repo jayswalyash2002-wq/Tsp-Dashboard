@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../business/data/business_providers.dart';
 import '../data/analytics_providers.dart';
 import '../domain/analytics_models.dart';
 import 'widgets/categorical_bar_chart.dart';

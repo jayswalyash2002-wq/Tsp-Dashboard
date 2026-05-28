@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/business_date_utils.dart';
+import '../../dashboard/data/dashboard_providers.dart';
 import '../data/business_providers.dart';
 import '../domain/business.dart';
 import '../data/business_repository.dart';
@@ -88,6 +90,16 @@ class BusinessService extends WidgetsBindingObserver {
         businessStatus: targetStatus,
         lastStatusUpdate: DateTime.now(),
       ));
+
+      // Also sync session
+      final sessionRepo = _ref.read(sessionRepositoryProvider);
+      if (sessionRepo != null) {
+        if (targetStatus == 'open') {
+          await sessionRepo.openBusiness(BusinessDateUtils.formatBusinessDate(DateTime.now()));
+        } else {
+          await sessionRepo.closeBusiness();
+        }
+      }
     }
   }
 
@@ -96,6 +108,10 @@ class BusinessService extends WidgetsBindingObserver {
       manualOverride: override,
       lastStatusUpdate: DateTime.now(),
     ));
+    // If turning off override, immediately check status based on schedule
+    if (!override) {
+      await checkBusinessStatus();
+    }
   }
 
   Future<void> setBusinessStatus(Business business, String status) async {
@@ -104,6 +120,24 @@ class BusinessService extends WidgetsBindingObserver {
       manualOverride: true, // Manually setting status typically overrides auto
       lastStatusUpdate: DateTime.now(),
     ));
+
+    // Also sync session
+    final sessionRepo = _ref.read(sessionRepositoryProvider);
+    if (sessionRepo != null) {
+      if (status == 'open') {
+        await sessionRepo.openBusiness(BusinessDateUtils.formatBusinessDate(DateTime.now()));
+      } else {
+        await sessionRepo.closeBusiness();
+      }
+    }
+  }
+
+  Future<void> openBusiness(Business business) async {
+    await setBusinessStatus(business, 'open');
+  }
+
+  Future<void> closeBusiness(Business business) async {
+    await setBusinessStatus(business, 'closed');
   }
 }
 

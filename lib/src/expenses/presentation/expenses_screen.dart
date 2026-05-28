@@ -8,6 +8,7 @@ import '../../core/format/money.dart';
 import '../../dashboard/domain/order_models.dart';
 import '../data/expense_providers.dart';
 import '../domain/expense.dart';
+import '../../core/widgets/responsive_widgets.dart';
 import '../domain/fund_movement.dart';
 
 import '../../activity_log/presentation/providers/activity_log_providers.dart';
@@ -537,65 +538,71 @@ class _ExpenseFormSheetState extends ConsumerState<_ExpenseFormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.of(context).viewInsets.bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            widget.expense == null ? 'Add expense' : 'Edit expense',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 24),
-          TextField(
-            controller: _amountController,
-            keyboardType: TextInputType.number,
-            autofocus: widget.expense == null,
-            decoration: const InputDecoration(
-              labelText: 'Amount (Rs.)',
-              border: OutlineInputBorder(),
-              prefixText: 'Rs. ',
+    return SingleChildScrollView(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.of(context).viewInsets.bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.expense == null ? 'Add expense' : 'Edit expense',
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            initialValue: _selectedCategory,
-            decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
-            items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-            onChanged: (v) => setState(() => _selectedCategory = v),
-          ),
-          if (_selectedCategory == 'Custom') ...[
+            const SizedBox(height: 24),
+            TextField(
+              controller: _amountController,
+              keyboardType: TextInputType.number,
+              autofocus: widget.expense == null,
+              decoration: const InputDecoration(
+                labelText: 'Amount (Rs.)',
+                border: OutlineInputBorder(),
+                prefixText: 'Rs. ',
+              ),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              isExpanded: true,
+              value: _selectedCategory,
+              decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
+              items: _categories.map((c) => DropdownMenuItem(
+                value: c, 
+                child: Text(c, overflow: TextOverflow.ellipsis),
+              )).toList(),
+              onChanged: (v) => setState(() => _selectedCategory = v),
+            ),
+            if (_selectedCategory == 'Custom') ...[
+              const SizedBox(height: 16),
+              TextField(
+                controller: _customCategoryController,
+                decoration: const InputDecoration(labelText: 'Custom category name', border: OutlineInputBorder()),
+              ),
+            ],
+            const SizedBox(height: 16),
+            SegmentedButton<PaymentMethod>(
+              segments: const [
+                ButtonSegment(value: PaymentMethod.cash, label: Text('Cash'), icon: Icon(Icons.payments_outlined)),
+                ButtonSegment(value: PaymentMethod.upi, label: Text('UPI'), icon: Icon(Icons.qr_code_scanner)),
+                ButtonSegment(value: PaymentMethod.card, label: Text('Card'), icon: Icon(Icons.credit_card)),
+              ],
+              selected: {_paymentMethod},
+              onSelectionChanged: (set) => setState(() => _paymentMethod = set.first),
+            ),
             const SizedBox(height: 16),
             TextField(
-              controller: _customCategoryController,
-              decoration: const InputDecoration(labelText: 'Custom category name', border: OutlineInputBorder()),
+              controller: _notesController,
+              decoration: const InputDecoration(labelText: 'Notes (Optional)', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 32),
+            FilledButton(
+              onPressed: _busy ? null : _submit,
+              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(60)),
+              child: _busy 
+                  ? const CircularProgressIndicator(color: Colors.white) 
+                  : Text(widget.expense == null ? 'Save expense' : 'Update expense'),
             ),
           ],
-          const SizedBox(height: 16),
-          SegmentedButton<PaymentMethod>(
-            segments: const [
-              ButtonSegment(value: PaymentMethod.cash, label: Text('Cash'), icon: Icon(Icons.payments_outlined)),
-              ButtonSegment(value: PaymentMethod.upi, label: Text('UPI'), icon: Icon(Icons.qr_code_scanner)),
-              ButtonSegment(value: PaymentMethod.card, label: Text('Card'), icon: Icon(Icons.credit_card)),
-            ],
-            selected: {_paymentMethod},
-            onSelectionChanged: (set) => setState(() => _paymentMethod = set.first),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _notesController,
-            decoration: const InputDecoration(labelText: 'Notes (Optional)', border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 32),
-          FilledButton(
-            onPressed: _busy ? null : _submit,
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(60)),
-            child: _busy 
-                ? const CircularProgressIndicator(color: Colors.white) 
-                : Text(widget.expense == null ? 'Save expense' : 'Update expense'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -693,54 +700,60 @@ class _AddFundsSheetState extends ConsumerState<_AddFundsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.of(context).viewInsets.bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Add funds', style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 24),
-          TextField(
-            controller: _amountController,
-            keyboardType: TextInputType.number,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Amount (Rs.)',
-              border: OutlineInputBorder(),
-              prefixText: 'Rs. ',
+    return SingleChildScrollView(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + MediaQuery.of(context).viewInsets.bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Add funds', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _amountController,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Amount (Rs.)',
+                border: OutlineInputBorder(),
+                prefixText: 'Rs. ',
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'cash', label: Text('Cash'), icon: Icon(Icons.payments_outlined)),
-              ButtonSegment(value: 'bank', label: Text('Bank'), icon: Icon(Icons.account_balance_outlined)),
-            ],
-            selected: {_type},
-            onSelectionChanged: (set) => setState(() => _type = set.first),
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            initialValue: _selectedReason,
-            decoration: const InputDecoration(labelText: 'Reason', border: OutlineInputBorder()),
-            items: _reasons.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
-            onChanged: (v) => setState(() => _selectedReason = v),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _notesController,
-            decoration: const InputDecoration(labelText: 'Notes (Optional)', border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 32),
-          FilledButton(
-            onPressed: _busy ? null : _submit,
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(60)),
-            child: _busy 
-                ? const CircularProgressIndicator(color: Colors.white) 
-                : const Text('Save funds'),
-          ),
-        ],
+            const SizedBox(height: 16),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'cash', label: Text('Cash'), icon: Icon(Icons.payments_outlined)),
+                ButtonSegment(value: 'bank', label: Text('Bank'), icon: Icon(Icons.account_balance_outlined)),
+              ],
+              selected: {_type},
+              onSelectionChanged: (set) => setState(() => _type = set.first),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              isExpanded: true,
+              value: _selectedReason,
+              decoration: const InputDecoration(labelText: 'Reason', border: OutlineInputBorder()),
+              items: _reasons.map((r) => DropdownMenuItem(
+                value: r, 
+                child: Text(r, overflow: TextOverflow.ellipsis),
+              )).toList(),
+              onChanged: (v) => setState(() => _selectedReason = v),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _notesController,
+              decoration: const InputDecoration(labelText: 'Notes (Optional)', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 32),
+            FilledButton(
+              onPressed: _busy ? null : _submit,
+              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(60)),
+              child: _busy 
+                  ? const CircularProgressIndicator(color: Colors.white) 
+                  : const Text('Save funds'),
+            ),
+          ],
+        ),
       ),
     );
   }

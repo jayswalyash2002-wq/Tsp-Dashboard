@@ -14,7 +14,7 @@ class PermissionManager {
   /// Returns true if the user has the specified permission.
   bool hasPermission(Permission permission) {
     if (_user == null) return false;
-    return _user!.hasPermission(permission);
+    return _user.hasPermission(permission);
   }
 
   /// Returns true if the user has AT LEAST ONE of the specified permissions.

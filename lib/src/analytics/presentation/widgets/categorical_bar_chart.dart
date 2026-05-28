@@ -21,7 +21,7 @@ class CategoricalBarChart extends StatelessWidget {
       return const Center(child: Text('No data available'));
     }
 
-    final total = data.fold<double>(0, (sum, item) => sum + item.value);
+    data.fold<double>(0, (sum, item) => sum + item.value);
 
     return Column(
       children: data.asMap().entries.map((entry) {

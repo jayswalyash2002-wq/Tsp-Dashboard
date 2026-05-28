@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../application/inventory_service.dart';
 import '../data/inventory_providers.dart';
 import '../domain/inventory_item.dart';
+import '../../core/widgets/responsive_widgets.dart';
 
 // Provider to track which items have already triggered a low-stock alert in this session
 final alertedItemsProvider = StateProvider<Set<String>>((ref) => <String>{});
@@ -341,21 +342,16 @@ class _AddEditInventoryDialogState extends ConsumerState<_AddEditInventoryDialog
               textCapitalization: TextCapitalization.words,
             ),
             const SizedBox(height: 12),
-            Row(
+            ResponsiveFormRow(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _stockController,
-                    decoration: const InputDecoration(labelText: 'Initial Stock'),
-                    keyboardType: TextInputType.number,
-                  ),
+                TextField(
+                  controller: _stockController,
+                  decoration: const InputDecoration(labelText: 'Initial Stock'),
+                  keyboardType: TextInputType.number,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _unitController,
-                    decoration: const InputDecoration(labelText: 'Unit', hintText: 'pcs/ml/g'),
-                  ),
+                TextField(
+                  controller: _unitController,
+                  decoration: const InputDecoration(labelText: 'Unit', hintText: 'pcs/ml/g'),
                 ),
               ],
             ),

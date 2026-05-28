@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tsp_dashboard/src/constants/roles.dart';
 import 'package:tsp_dashboard/src/auth/data/auth_providers.dart';
-import '../../../core/rbac/role.dart' as rbac;
 import '../../../memberships/data/membership_providers.dart';
 import '../../../memberships/domain/membership.dart';
 import '../providers/staff_providers.dart';
@@ -106,7 +105,8 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
               ),
               const SizedBox(height: 20),
               DropdownButtonFormField<Role>(
-                initialValue: _selectedRole,
+                isExpanded: true,
+                value: _selectedRole,
                 onChanged: isLoading ? null : (v) => setState(() => _selectedRole = v!),
                 decoration: InputDecoration(
                   labelText: 'Role',
@@ -122,13 +122,13 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
                     return const DropdownMenuItem<Role>(
                       value: null,
                       enabled: false,
-                      child: Text('OWNER (Owner only)'),
+                      child: Text('OWNER (Owner only)', overflow: TextOverflow.ellipsis),
                     );
                   }
 
                   return DropdownMenuItem(
                     value: role,
-                    child: Text(role.name.toUpperCase()),
+                    child: Text(role.name.toUpperCase(), overflow: TextOverflow.ellipsis),
                   );
                 }).where((item) => item.value != null).toList(),
               ),

@@ -6,7 +6,6 @@ import '../../core/firebase/firebase_providers.dart';
 import '../application/order_controller.dart';
 import '../data/dashboard_providers.dart';
 import '../domain/menu_item.dart';
-import '../domain/order_models.dart';
 import 'widgets/sticky_cart_bar.dart';
 
 import '../../memberships/data/membership_providers.dart';

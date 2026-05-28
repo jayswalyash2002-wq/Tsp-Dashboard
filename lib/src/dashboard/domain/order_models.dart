@@ -134,6 +134,9 @@ class OrderDraft {
     required this.paymentMethod,
     required this.paymentStatus,
     required this.splitLines,
+    this.customerName,
+    this.customerPhone,
+    this.customerId,
   });
 
   final List<OrderLine> lines;
@@ -144,6 +147,9 @@ class OrderDraft {
   final PaymentMethod paymentMethod;
   final PaymentStatus paymentStatus;
   final List<SplitLine> splitLines;
+  final String? customerName;
+  final String? customerPhone;
+  final String? customerId;
 
   int get subtotalPaise => lines.fold(0, (total, l) => total + l.lineTotalPaise);
 
@@ -176,6 +182,9 @@ class OrderDraft {
     PaymentMethod? paymentMethod,
     PaymentStatus? paymentStatus,
     List<SplitLine>? splitLines,
+    String? customerName,
+    String? customerPhone,
+    String? customerId,
   }) {
     return OrderDraft(
       lines: lines ?? this.lines,
@@ -185,6 +194,9 @@ class OrderDraft {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       splitLines: splitLines ?? this.splitLines,
+      customerName: customerName ?? this.customerName,
+      customerPhone: customerPhone ?? this.customerPhone,
+      customerId: customerId ?? this.customerId,
     );
   }
 
@@ -210,6 +222,9 @@ class OrderDraft {
       paymentMethod: paymentMethod,
       paymentStatus: paymentStatus,
       splitLines: splitLines,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      customerId: customerId,
     );
   }
 }
@@ -238,6 +253,9 @@ class SavedOrder extends OrderDraft {
     required super.paymentMethod,
     required super.paymentStatus,
     required super.splitLines,
+    super.customerName,
+    super.customerPhone,
+    super.customerId,
   });
 
   final String id;
@@ -287,6 +305,9 @@ class SavedOrder extends OrderDraft {
       cancelledAt: (map['cancelledAt'] as Timestamp?)?.toDate(),
       refundRequired: map['refundRequired'] ?? false,
       inventoryDeducted: map['inventoryDeducted'] ?? false,
+      customerName: map['customerName'] as String?,
+      customerPhone: map['customerPhone'] as String?,
+      customerId: map['customerId'] as String?,
       lines: items
           .map((i) => OrderLine(
                   item: MenuItem(
@@ -345,6 +366,9 @@ class SavedOrder extends OrderDraft {
     DateTime? cancelledAt,
     bool? refundRequired,
     bool? inventoryDeducted,
+    String? customerName,
+    String? customerPhone,
+    String? customerId,
   }) {
     return SavedOrder(
       id: id ?? this.id,
@@ -362,6 +386,9 @@ class SavedOrder extends OrderDraft {
       cancelledAt: cancelledAt ?? this.cancelledAt,
       refundRequired: refundRequired ?? this.refundRequired,
       inventoryDeducted: inventoryDeducted ?? this.inventoryDeducted,
+      customerName: customerName ?? this.customerName,
+      customerPhone: customerPhone ?? this.customerPhone,
+      customerId: customerId ?? this.customerId,
       lines: lines ?? this.lines,
       discountType: discountType ?? this.discountType,
       discountValue: discountValue ?? this.discountValue,

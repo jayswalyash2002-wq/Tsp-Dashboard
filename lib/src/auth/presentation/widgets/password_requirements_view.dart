@@ -46,6 +46,7 @@ class PasswordRequirementsView extends StatelessWidget {
     );
   }
 
+  // ignore: non_constant_identifier_names
   Widget _RequirementItem(String text) {
     const color = Colors.red;
     const icon = Icons.cancel_rounded;

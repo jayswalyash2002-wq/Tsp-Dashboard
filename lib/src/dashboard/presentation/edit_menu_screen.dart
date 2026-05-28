@@ -649,7 +649,6 @@ void _showDeleteConfirm(BuildContext context, WidgetRef ref, MenuItem item) {
 
 class _CategoryHeader extends StatelessWidget {
   const _CategoryHeader({
-    super.key,
     required this.name,
     required this.isExpanded,
     required this.onToggle,
