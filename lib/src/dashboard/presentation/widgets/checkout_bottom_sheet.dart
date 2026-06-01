@@ -420,11 +420,9 @@ class _CheckoutBottomSheetState extends ConsumerState<CheckoutBottomSheet> {
                                       final messenger = ScaffoldMessenger.of(context);
                                       try {
                                         await ref.read(orderControllerProvider.notifier).submit();
-                                        if (mounted) {
-                                          ref.read(toastServiceProvider).showSuccess(context, 'Order completed successfully');
-                                          // ignore: use_build_context_synchronously
-                                          Navigator.pop(context);
-                                        }
+                                        if (!context.mounted) return;
+                                        ref.read(toastServiceProvider).showSuccess(context, 'Order completed successfully');
+                                        Navigator.pop(context);
                                       } catch (e) {
                                         messenger.showSnackBar(
                                           SnackBar(content: Text('Failed to save order: $e')),

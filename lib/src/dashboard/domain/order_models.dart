@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
+import '../../core/sync/sync_models.dart';
 
 import 'menu_item.dart';
 
@@ -141,7 +142,6 @@ class OrderDraft {
 
   final List<OrderLine> lines;
   final DiscountType discountType;
-  /// Flat: paise, Percent: 0-100
   final int discountValue;
   final DiscountReason? discountReason;
   final PaymentMethod paymentMethod;
@@ -246,17 +246,29 @@ class SavedOrder extends OrderDraft {
     this.cancelledAt,
     this.refundRequired = false,
     this.inventoryDeducted = false,
-    required super.lines,
-    required super.discountType,
-    required super.discountValue,
-    required super.discountReason,
-    required super.paymentMethod,
-    required super.paymentStatus,
-    required super.splitLines,
-    super.customerName,
-    super.customerPhone,
-    super.customerId,
-  });
+    required List<OrderLine> lines,
+    required DiscountType discountType,
+    required int discountValue,
+    required DiscountReason? discountReason,
+    required PaymentMethod paymentMethod,
+    required PaymentStatus paymentStatus,
+    required List<SplitLine> splitLines,
+    String? customerName,
+    String? customerPhone,
+    String? customerId,
+    this.syncMetadata,
+  }) : super(
+          lines: lines,
+          discountType: discountType,
+          discountValue: discountValue,
+          discountReason: discountReason,
+          paymentMethod: paymentMethod,
+          paymentStatus: paymentStatus,
+          splitLines: splitLines,
+          customerName: customerName,
+          customerPhone: customerPhone,
+          customerId: customerId,
+        );
 
   final String id;
   final DateTime timestamp;
@@ -274,7 +286,9 @@ class SavedOrder extends OrderDraft {
   final DateTime? cancelledAt;
   final bool refundRequired;
   final bool inventoryDeducted;
+  final SyncMetadata? syncMetadata;
 
+  bool get isSynced => syncMetadata?.synced ?? true;
   bool get isCancelled => status == OrderStatus.cancelled;
   bool get isRefunded => status == OrderStatus.refunded;
   bool get shouldIncludeInSales =>
@@ -289,20 +303,27 @@ class SavedOrder extends OrderDraft {
     final items = map['items'] as List<dynamic>;
     final user = map['loggedInUser'] as Map<String, dynamic>;
 
+    DateTime? parseDate(dynamic val) {
+      if (val == null) return null;
+      if (val is Timestamp) return val.toDate();
+      if (val is String) return DateTime.parse(val);
+      return null;
+    }
+
     return SavedOrder(
       id: id,
-      timestamp: (map['timestamp'] as Timestamp).toDate(),
+      timestamp: parseDate(map['timestamp']) ?? DateTime.now(),
       deviceName: map['deviceName'] as String,
       userEmail: user['email'] as String,
       userId: user['uid'] as String,
       status: OrderStatus.fromString(map['status']),
-      createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
-      preparingAt: (map['preparingAt'] as Timestamp?)?.toDate(),
-      completedAt: (map['completedAt'] as Timestamp?)?.toDate(),
-      servedAt: (map['servedAt'] as Timestamp?)?.toDate(),
+      createdAt: parseDate(map['createdAt']),
+      preparingAt: parseDate(map['preparingAt']),
+      completedAt: parseDate(map['completedAt']),
+      servedAt: parseDate(map['servedAt']),
       cancellationReason: map['cancellationReason'] as String?,
       cancelledBy: map['cancelledBy'] as String?,
-      cancelledAt: (map['cancelledAt'] as Timestamp?)?.toDate(),
+      cancelledAt: parseDate(map['cancelledAt']),
       refundRequired: map['refundRequired'] ?? false,
       inventoryDeducted: map['inventoryDeducted'] ?? false,
       customerName: map['customerName'] as String?,
@@ -315,7 +336,7 @@ class SavedOrder extends OrderDraft {
                     name: i['name'],
                     category: i['category'],
                     pricePaise: i['pricePaise'],
-                    available: true, // Not relevant for past orders
+                    available: true,
                     consumableMappings: (i['consumableMappings'] as Map<dynamic, dynamic>?)?.map(
                           (key, value) => MapEntry(
                             key.toString(),
@@ -339,6 +360,9 @@ class SavedOrder extends OrderDraft {
                   ))
               .toList() ??
           [],
+      syncMetadata: map['syncMetadata'] != null 
+          ? SyncMetadata.fromMap(Map<String, dynamic>.from(map['syncMetadata'])) 
+          : null,
     );
   }
 
@@ -369,6 +393,7 @@ class SavedOrder extends OrderDraft {
     String? customerName,
     String? customerPhone,
     String? customerId,
+    SyncMetadata? syncMetadata,
   }) {
     return SavedOrder(
       id: id ?? this.id,
@@ -396,7 +421,67 @@ class SavedOrder extends OrderDraft {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       splitLines: splitLines ?? this.splitLines,
+      syncMetadata: syncMetadata ?? this.syncMetadata,
     );
   }
-}
 
+  Map<String, dynamic> toFirestoreMap() {
+    final Map<String, dynamic> data = <String, dynamic>{};
+    data['orderId'] = id;
+    data['timestamp'] = Timestamp.fromDate(timestamp);
+    data['deviceName'] = deviceName;
+    data['loggedInUser'] = {'uid': userId, 'email': userEmail};
+    data['status'] = status.name;
+    data['createdAt'] = createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp();
+    data['updatedAt'] = FieldValue.serverTimestamp();
+
+    final List<Map<String, dynamic>> itemsList = [];
+    for (final OrderLine ol in lines) {
+      final Map<String, dynamic> itemMap = <String, dynamic>{};
+      itemMap['itemId'] = ol.item.id;
+      itemMap['name'] = ol.item.name;
+      itemMap['category'] = ol.item.category;
+      itemMap['pricePaise'] = ol.item.pricePaise;
+      itemMap['qty'] = ol.qty;
+      itemMap['lineTotalPaise'] = ol.lineTotalPaise;
+      itemMap['consumableMappings'] = ol.item.consumableMappings;
+      itemsList.add(itemMap);
+    }
+    data['items'] = itemsList;
+
+    data['subtotalPaise'] = subtotalPaise;
+    data['discount'] = {
+      'type': discountType.name,
+      'value': discountValue,
+      'reason': discountReason?.name,
+      'discountPaise': discountPaise,
+    };
+    data['totalPaise'] = totalPaise;
+    data['payment'] = {
+      'method': paymentMethod.name,
+      'status': paymentStatus.name,
+      'splitLines': splitLines.map((s) => s.toMap()).toList(),
+    };
+    data['customerName'] = customerName;
+    data['customerPhone'] = customerPhone;
+    data['customerId'] = customerId;
+    data['inventoryDeducted'] = inventoryDeducted;
+    return data;
+  }
+
+  Map<String, dynamic> toLocalMap() {
+    final Map<String, dynamic> map = toFirestoreMap();
+    map['timestamp'] = timestamp.toIso8601String();
+    if (createdAt != null) map['createdAt'] = createdAt!.toIso8601String();
+    if (preparingAt != null) map['preparingAt'] = preparingAt!.toIso8601String();
+    if (completedAt != null) map['completedAt'] = completedAt!.toIso8601String();
+    if (servedAt != null) map['servedAt'] = servedAt!.toIso8601String();
+    if (cancelledAt != null) map['cancelledAt'] = cancelledAt!.toIso8601String();
+    
+    final s = syncMetadata;
+    if (s != null) {
+      map['syncMetadata'] = s.toMap();
+    }
+    return map;
+  }
+}

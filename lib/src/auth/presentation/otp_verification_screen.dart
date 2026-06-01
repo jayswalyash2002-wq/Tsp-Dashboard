@@ -103,7 +103,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
       // Sync local state for AuthGate to bypass DeviceNameScreen
       ref.read(deviceNameProvider.notifier).state = widget.name;
 
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Account created successfully!'),

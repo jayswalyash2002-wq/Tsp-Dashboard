@@ -238,17 +238,15 @@ class _ActiveStaffTab extends ConsumerWidget {
                 
                 await repo.removeMember(staff.uid, performer: performer);
                 
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${staff.displayName} removed successfully')),
-                  );
-                }
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('${staff.displayName} removed successfully')),
+                );
               } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e')),
-                  );
-                }
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: $e')),
+                );
               }
             },
             child: const Text('Remove', style: TextStyle(color: Colors.red)),
@@ -535,19 +533,17 @@ class _InviteDetailSheet extends ConsumerWidget {
                 await ref.read(inviteServiceProvider).revokeInvite(invite.businessId, invite.id!);
 
                 // 3. Close the bottom sheet safely after the operation
-                if (context.mounted) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (context.mounted) {
-                      Navigator.of(context).pop();
-                    }
-                  });
-                }
+                if (!context.mounted) return;
+                
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!context.mounted) return;
+                  Navigator.of(context).pop();
+                });
               } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error revoking invite: $e')),
-                  );
-                }
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error revoking invite: $e')),
+                );
               }
             },
             child: const Text('Revoke', style: TextStyle(color: Colors.red)),

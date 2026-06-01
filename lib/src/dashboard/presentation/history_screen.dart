@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import 'widgets/cancellation_dialog.dart';
 import '../../core/utils/business_date_utils.dart';
+import '../../core/widgets/sync_indicator.dart';
 import '../application/order_controller.dart';
 import '../data/dashboard_providers.dart';
 import '../domain/order_models.dart';
@@ -137,6 +138,8 @@ class _OrderTile extends ConsumerWidget {
                         ),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    PendingSyncBadge(isSynced: order.isSynced),
                     const Spacer(),
                     _OrderPopupMenu(order: order),
                   ],

@@ -6,8 +6,13 @@ import 'package:uuid/uuid.dart';
 import '../../activity_log/data/models/activity_log_model.dart';
 import '../../activity_log/domain/entities/activity_log_enums.dart';
 import '../../activity_log/domain/repositories/activity_log_repository.dart';
+import '../../activity_log/presentation/providers/activity_log_providers.dart';
+import '../../auth/data/auth_providers.dart';
 import '../../auth/data/auth_repository.dart';
+import '../../core/firebase/firebase_providers.dart';
 import '../../customers/domain/customer.dart';
+import '../../core/sync/local_database_service.dart';
+import '../../core/sync/sync_models.dart';
 import '../domain/order_models.dart';
 
 class OrderRepository {
@@ -16,24 +21,28 @@ class OrderRepository {
     required FirebaseAuth auth,
     required AuthRepository authRepo,
     required ActivityLogRepository activityLogRepo,
+    required LocalDatabaseService localDb,
     required String businessId,
   })  : _db = db,
         _auth = auth,
         _authRepo = authRepo,
         _activityLogRepo = activityLogRepo,
+        _localDb = localDb,
         _businessId = businessId;
 
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;
   final AuthRepository _authRepo;
   final ActivityLogRepository _activityLogRepo;
+  final LocalDatabaseService _localDb;
   final String _businessId;
 
   Stream<List<SavedOrder>> watchOrders() {
     if (kDebugMode) {
       debugPrint('ORDER_REPO: Watching orders for businessId: $_businessId');
     }
-    return _db
+    
+    final firestoreStream = _db
         .collection('orders')
         .where('businessId', isEqualTo: _businessId)
         .orderBy('timestamp', descending: true)
@@ -42,6 +51,20 @@ class OrderRepository {
         .map((snap) => snap.docs
             .map((doc) => SavedOrder.fromMap(doc.id, doc.data()))
             .toList());
+
+    // Merge with local unsynced orders to ensure optimistic updates are visible
+    return firestoreStream.map((remoteOrders) {
+      final localUnsynced = _localDb.getUnsyncedOrders();
+      
+      // Filter out remote orders that are actually the same as local unsynced ones
+      // (though they shouldn't be remote yet if they are unsynced)
+      final localIds = localUnsynced.map((o) => o.id).toSet();
+      final filteredRemote = remoteOrders.where((o) => !localIds.contains(o.id)).toList();
+      
+      final merged = [...localUnsynced, ...filteredRemote];
+      merged.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return merged;
+    });
   }
 
   Future<String> saveOrder(OrderDraft draft) async {
@@ -52,97 +75,93 @@ class OrderRepository {
     final now = DateTime.now();
     final orderId = const Uuid().v4();
 
-    final orderRef = _db.collection('orders').doc(orderId);
-    final balancesRef = _db.collection('balances').doc(_businessId);
+    // 1. Create the model with SyncMetadata
+    final order = draft.toOrder(
+      id: orderId,
+      timestamp: now,
+      deviceName: deviceName,
+      userEmail: user.email ?? 'unknown',
+      userId: user.uid,
+    ).copyWith(
+      syncMetadata: SyncMetadata(
+        localId: orderId,
+        createdAt: now,
+        updatedAt: now,
+        synced: false,
+      ),
+      status: OrderStatus.pending,
+    );
 
-    if (kDebugMode) {
-      debugPrint('ORDER_REPO: Saving order $orderId for businessId: $_businessId');
-    }
-
-    await _db.runTransaction((tx) async {
-      // 1. PERFORM ALL READS FIRST
-      final balancesSnap = await tx.get(balancesRef);
-      
-      String? customerId;
-      if (draft.paymentStatus == PaymentStatus.paid) {
-        customerId = await _handleCustomerUpdate(
-          tx,
-          draft.customerPhone,
-          draft.customerName,
-          draft.totalPaise,
-          now,
-        );
-      }
-
-      // 2. PERFORM ALL WRITES
-      if (draft.paymentStatus == PaymentStatus.paid) {
-        final data = balancesSnap.data() ?? {};
-        int cash = data['cashBalancePaise'] ?? 0;
-        int bank = data['bankBalancePaise'] ?? 0;
-
-        final newImpact = _calculateImpact(draft);
-        cash += newImpact.cash;
-        bank += newImpact.bank;
-
-        tx.set(
-          balancesRef,
-          {
-            'businessId': _businessId,
-            'cashBalancePaise': cash,
-            'bankBalancePaise': bank,
-            'updatedAt': FieldValue.serverTimestamp(),
-            'updatedAtMs': DateTime.now().millisecondsSinceEpoch,
-          },
-          SetOptions(merge: true),
-        );
-      }
-
-      tx.set(orderRef, {
-        'orderId': orderId,
-        'businessId': _businessId,
-        'timestamp': Timestamp.fromDate(now),
-        'timestampMs': now.millisecondsSinceEpoch,
-        'loggedInUser': {
-          'uid': user.uid,
-          'email': user.email,
-        },
-        'deviceName': deviceName,
-        'status': OrderStatus.pending.name,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'items': [
-          for (final l in draft.lines)
-            {
-              'itemId': l.item.id,
-              'name': l.item.name,
-              'category': l.item.category,
-              'pricePaise': l.item.pricePaise,
-              'qty': l.qty,
-              'lineTotalPaise': l.lineTotalPaise,
-              'consumableMappings': l.item.consumableMappings,
-            }
-        ],
-        'subtotalPaise': draft.subtotalPaise,
-        'discount': {
-          'type': draft.discountType.name,
-          'value': draft.discountValue,
-          'reason': draft.discountReason?.name,
-          'discountPaise': draft.discountPaise,
-        },
-        'totalPaise': draft.totalPaise,
-        'payment': {
-          'method': draft.paymentMethod.name,
-          'status': draft.paymentStatus.name,
-          'splitLines': [for (final s in draft.splitLines) s.toMap()],
-        },
-        'customerName': draft.customerName,
-        'customerPhone': draft.customerPhone,
-        'customerId': customerId,
-        'inventoryDeducted': false,
-      });
-    });
+    // 2. Save locally first (Optimistic Update)
+    await _localDb.saveOrder(order);
+    
+    // 3. Trigger background sync (don't await)
+    syncOrder(order);
 
     return orderId;
+  }
+
+  Future<void> syncOrder(SavedOrder order) async {
+    if (order.isSynced) return;
+
+    final orderRef = _db.collection('orders').doc(order.id);
+    final balancesRef = _db.collection('balances').doc(_businessId);
+    
+    try {
+      await _db.runTransaction((tx) async {
+        final balancesSnap = await tx.get(balancesRef);
+        final now = DateTime.now();
+        
+        String? customerId;
+        if (order.paymentStatus == PaymentStatus.paid) {
+          customerId = await _handleCustomerUpdate(
+            tx,
+            order.customerPhone,
+            order.customerName,
+            order.totalPaise,
+            now,
+          );
+        }
+
+        if (order.paymentStatus == PaymentStatus.paid) {
+          final data = balancesSnap.data() ?? {};
+          int cash = data['cashBalancePaise'] ?? 0;
+          int bank = data['bankBalancePaise'] ?? 0;
+
+          final newImpact = _calculateImpact(order);
+          cash += newImpact.cash;
+          bank += newImpact.bank;
+
+          tx.set(
+            balancesRef,
+            {
+              'businessId': _businessId,
+              'cashBalancePaise': cash,
+              'bankBalancePaise': bank,
+              'updatedAt': FieldValue.serverTimestamp(),
+              'updatedAtMs': DateTime.now().millisecondsSinceEpoch,
+            },
+            SetOptions(merge: true),
+          );
+        }
+
+        final firestoreMap = order.toFirestoreMap();
+        if (customerId != null) {
+          firestoreMap['customerId'] = customerId;
+        }
+        tx.set(orderRef, firestoreMap);
+      });
+
+      // Mark as synced locally
+      final syncedOrder = order.copyWith(
+        syncMetadata: order.syncMetadata?.copyWith(synced: true, updatedAt: DateTime.now()),
+      );
+      await _localDb.saveOrder(syncedOrder);
+      debugPrint('ORDER_REPO: Sync successful for ${order.id}');
+    } catch (e) {
+      debugPrint('ORDER_REPO: Sync failed for ${order.id}: $e');
+      // Metadata remains unsynced, background SyncService will retry later
+    }
   }
 
   Future<void> updateOrder(SavedOrder oldOrder, SavedOrder newOrder) async {
@@ -320,13 +339,10 @@ class OrderRepository {
         case OrderStatus.pending:
           break;
         case OrderStatus.paid:
-          // TODO: Handle this case.
           throw UnimplementedError();
         case OrderStatus.cancelled:
-          // TODO: Handle this case.
           throw UnimplementedError();
         case OrderStatus.refunded:
-          // TODO: Handle this case.
           throw UnimplementedError();
       }
 

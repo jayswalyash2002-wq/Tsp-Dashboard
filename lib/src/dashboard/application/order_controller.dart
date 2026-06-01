@@ -1,7 +1,8 @@
 import 'dart:async' show unawaited;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/dashboard_providers.dart';
+import 'package:tsp_dashboard/src/dashboard/data/order_repository.dart';
+import 'package:tsp_dashboard/src/dashboard/data/dashboard_providers.dart';
 import '../domain/menu_item.dart';
 import '../domain/order_models.dart';
 import '../../activity_log/presentation/providers/activity_log_providers.dart';

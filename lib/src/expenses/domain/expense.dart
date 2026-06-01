@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../dashboard/domain/order_models.dart';
+import '../../core/sync/sync_models.dart';
 
 class Expense {
   Expense({
@@ -12,6 +13,11 @@ class Expense {
     required this.timestamp,
     required this.timestampMs,
     this.businessId,
+    this.payableTo,
+    this.expenseStatus = 'unsettled',
+    this.settledAt,
+    this.settledBy,
+    this.syncMetadata,
   });
 
   final String id;
@@ -23,9 +29,16 @@ class Expense {
   final DateTime timestamp;
   final int timestampMs;
   final String? businessId;
+  final String? payableTo;
+  final String expenseStatus; // 'unsettled' | 'settled'
+  final DateTime? settledAt;
+  final String? settledBy;
+  final SyncMetadata? syncMetadata;
+
+  bool get isSynced => syncMetadata?.synced ?? true;
 
   Map<String, dynamic> toMap() {
-    return {
+    final map = <String, dynamic>{
       'amountPaise': amountPaise,
       'category': category,
       'paymentMethod': paymentMethod.name,
@@ -33,11 +46,23 @@ class Expense {
       'createdBy': createdBy,
       'timestamp': Timestamp.fromDate(timestamp),
       'timestampMs': timestampMs,
-      if (businessId != null) 'businessId': businessId,
+      'expenseStatus': expenseStatus,
     };
+    if (businessId != null) map['businessId'] = businessId;
+    if (payableTo != null) map['payableTo'] = payableTo;
+    if (settledAt != null) map['settledAt'] = Timestamp.fromDate(settledAt!);
+    if (settledBy != null) map['settledBy'] = settledBy;
+    return map;
   }
 
   factory Expense.fromMap(String id, Map<String, dynamic> map) {
+    DateTime? parseDate(dynamic val) {
+      if (val == null) return null;
+      if (val is Timestamp) return val.toDate();
+      if (val is String) return DateTime.parse(val);
+      return null;
+    }
+
     return Expense(
       id: id,
       amountPaise: map['amountPaise'] ?? 0,
@@ -45,9 +70,16 @@ class Expense {
       paymentMethod: PaymentMethod.fromString(map['paymentMethod']),
       notes: map['notes'] ?? '',
       createdBy: map['createdBy'] ?? '',
-      timestamp: (map['timestamp'] as Timestamp).toDate(),
+      timestamp: parseDate(map['timestamp']) ?? DateTime.now(),
       timestampMs: map['timestampMs'] ?? 0,
       businessId: map['businessId']?.toString(),
+      payableTo: map['payableTo']?.toString(),
+      expenseStatus: map['expenseStatus'] ?? 'settled',
+      settledAt: parseDate(map['settledAt']),
+      settledBy: map['settledBy']?.toString(),
+      syncMetadata: map['syncMetadata'] != null 
+          ? SyncMetadata.fromMap(Map<String, dynamic>.from(map['syncMetadata'])) 
+          : null,
     );
   }
 
@@ -60,6 +92,11 @@ class Expense {
     String? createdBy,
     DateTime? timestamp,
     int? timestampMs,
+    String? payableTo,
+    String? expenseStatus,
+    DateTime? settledAt,
+    String? settledBy,
+    SyncMetadata? syncMetadata,
   }) {
     return Expense(
       id: id ?? this.id,
@@ -70,6 +107,26 @@ class Expense {
       createdBy: createdBy ?? this.createdBy,
       timestamp: timestamp ?? this.timestamp,
       timestampMs: timestampMs ?? this.timestampMs,
+      payableTo: payableTo ?? this.payableTo,
+      expenseStatus: expenseStatus ?? this.expenseStatus,
+      settledAt: settledAt ?? this.settledAt,
+      settledBy: settledBy ?? this.settledBy,
+      syncMetadata: syncMetadata ?? this.syncMetadata,
     );
+  }
+
+  Map<String, dynamic> toFirestoreMap() {
+    return toMap();
+  }
+
+  Map<String, dynamic> toLocalMap() {
+    final map = toFirestoreMap();
+    map['timestamp'] = timestamp.toIso8601String();
+    if (settledAt != null) map['settledAt'] = settledAt!.toIso8601String();
+    final s = syncMetadata;
+    if (s != null) {
+      map['syncMetadata'] = s.toMap();
+    }
+    return map;
   }
 }

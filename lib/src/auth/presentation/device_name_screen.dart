@@ -32,7 +32,7 @@ class _DeviceNameScreenState extends ConsumerState<DeviceNameScreen> {
       // Update provider to trigger AuthGate rebuild
       ref.read(deviceNameProvider.notifier).state = name;
     } catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not save device name: $e')),
       );

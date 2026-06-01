@@ -69,18 +69,16 @@ class _EditStaffScreenState extends ConsumerState<EditStaffScreen> {
       if (performer == null) throw Exception('Performer profile not found');
 
       await repo.updateStaffMember(updatedStaff, performer: performer);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Staff member updated successfully')),
-        );
-        Navigator.pop(context);
-      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Staff member updated successfully')),
+      );
+      Navigator.pop(context);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

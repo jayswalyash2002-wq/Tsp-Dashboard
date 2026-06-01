@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/firebase/firebase_providers.dart';
+import '../../core/sync/local_database_service.dart';
 import '../domain/expense.dart';
 import '../domain/fund_movement.dart';
 import 'expense_repository.dart';
@@ -13,9 +14,11 @@ final expenseRepositoryProvider = FutureProvider<ExpenseRepository?>((ref) async
 
   final db = ref.watch(firestoreProvider);
   final auth = ref.watch(firebaseAuthProvider);
+  final localDb = ref.watch(localDatabaseServiceProvider);
   return ExpenseRepository(
     db: db, 
     auth: auth, 
+    localDb: localDb,
     businessId: businessId, 
   );
 });
@@ -40,6 +43,19 @@ final expensesProvider = StreamProvider<List<Expense>>((ref) async* {
   } else {
     yield* repo.watchExpenses();
   }
+});
+
+enum ExpenseFilter { all, settled, unsettled }
+final expenseFilterProvider = StateProvider<ExpenseFilter>((ref) => ExpenseFilter.all);
+
+final filteredExpensesProvider = Provider<AsyncValue<List<Expense>>>((ref) {
+  final expensesAsync = ref.watch(expensesProvider);
+  final filter = ref.watch(expenseFilterProvider);
+
+  return expensesAsync.whenData((expenses) {
+    if (filter == ExpenseFilter.all) return expenses;
+    return expenses.where((e) => e.expenseStatus == filter.name).toList();
+  });
 });
 
 final fundMovementsProvider = StreamProvider<List<FundMovement>>((ref) {

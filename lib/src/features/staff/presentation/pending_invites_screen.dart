@@ -199,11 +199,10 @@ class _InviteCard extends ConsumerWidget {
               try {
                 await ref.read(inviteServiceProvider).revokeInvite(invite.businessId, invite.id!);
               } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error revoking invite: $e')),
-                  );
-                }
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error revoking invite: $e')),
+                );
               }
             },
             child: const Text('Revoke', style: TextStyle(color: Colors.red)),

@@ -192,7 +192,8 @@ class ProfileScreen extends ConsumerWidget {
                 await repo.signOut();
                 // Clear local device name state on logout
                 ref.read(deviceNameProvider.notifier).state = null;
-                if (context.mounted) context.go('/auth');
+                if (!context.mounted) return;
+                context.go('/auth');
               },
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(56),

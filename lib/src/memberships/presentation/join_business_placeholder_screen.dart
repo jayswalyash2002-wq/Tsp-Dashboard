@@ -246,21 +246,20 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
         // We still proceed, but the user might hit the AuthGate loader for a few more seconds
       }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Joined business successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        debugPrint('CLAIM_PROCESS: NAVIGATING TO DASHBOARD');
-        context.go('/dashboard');
-        return true;
-      }
-      return false;
+      if (!context.mounted) return false;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Joined business successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      debugPrint('CLAIM_PROCESS: NAVIGATING TO DASHBOARD');
+      context.go('/dashboard');
+      return true;
     } catch (e) {
       debugPrint('CLAIM_PROCESS_CATCH: $e');
-      if (mounted) {
+      if (context.mounted) {
         _setError(e.toString().replaceAll('Exception: ', ''));
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to join: $e'), backgroundColor: Colors.red),

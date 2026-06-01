@@ -52,16 +52,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       );
 
-      if (mounted) {
-        context.go('/dashboard');
-      }
+      if (!context.mounted) return;
+      context.go('/dashboard');
     } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message ?? 'Login failed')),
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Login failed: $e')),
       );

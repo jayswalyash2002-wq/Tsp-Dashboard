@@ -94,9 +94,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       try {
         final db = ref.read(firestoreProvider);
         await db.collection('users').doc(user.uid).update({'displayName': name});
-        if (mounted) context.pushReplacement('/business-setup');
+        if (!context.mounted) return;
+        context.pushReplacement('/business-setup');
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       } finally {
         if (mounted) setState(() => _busy = false);
       }
@@ -111,7 +113,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       await repo.sendOtp(
         phone,
         onCodeSent: (verificationId, resendToken) {
-          if (!mounted) return;
+          if (!context.mounted) return;
           setState(() => _busy = false);
 
           if (kDebugMode) {
@@ -148,7 +150,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           );
         },
         onVerificationFailed: (e) {
-          if (!mounted) return;
+          if (!context.mounted) return;
           setState(() => _busy = false);
           final message = e is FirebaseAuthException ? e.message : e.toString();
           ScaffoldMessenger.of(context).showSnackBar(
@@ -157,7 +159,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         },
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to initiate verification: $e')),

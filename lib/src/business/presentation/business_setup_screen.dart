@@ -145,7 +145,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
           city: _cityController.text.trim(),
         );
 
-        if (duplicates.isNotEmpty && mounted) {
+        if (duplicates.isNotEmpty && context.mounted) {
           final proceed = await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
@@ -195,7 +195,7 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
     if (user == null) {
       // Unauthenticated flow: Store details and go to Sign Up
       ref.read(pendingBusinessProvider.notifier).state = businessData;
-      // ignore: use_build_context_synchronously
+      if (!context.mounted) return;
       context.push('/auth/signup');
       return;
     }
@@ -270,15 +270,13 @@ class _BusinessSetupScreenState extends ConsumerState<BusinessSetupScreen> {
       ref.invalidate(userProfileProvider);
       ref.invalidate(currentBusinessProvider);
 
-      if (mounted) {
-        context.go('/dashboard');
-      }
+      if (!context.mounted) return;
+      context.go('/dashboard');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving business: $e')),
-        );
-      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving business: $e')),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

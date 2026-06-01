@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../activity_log/presentation/providers/activity_log_providers.dart';
 import '../../auth/data/auth_providers.dart';
 import '../../core/firebase/firebase_providers.dart';
+import '../../core/sync/local_database_service.dart';
 import '../../core/utils/business_date_utils.dart';
 import '../domain/menu_item.dart';
 import '../domain/order_models.dart';
@@ -35,12 +36,14 @@ final orderRepositoryProvider = FutureProvider<OrderRepository?>((ref) async {
   final auth = ref.watch(firebaseAuthProvider);
   final authRepo = await ref.watch(authRepositoryProvider.future);
   final activityLogRepo = ref.watch(activityLogRepositoryProvider);
+  final localDb = ref.watch(localDatabaseServiceProvider);
 
   return OrderRepository(
     db: db,
     auth: auth,
     authRepo: authRepo,
     activityLogRepo: activityLogRepo,
+    localDb: localDb,
     businessId: businessId,
   );
 });

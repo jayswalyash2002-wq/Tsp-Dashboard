@@ -8,6 +8,7 @@ import '../data/dashboard_providers.dart';
 import '../domain/menu_item.dart';
 import 'widgets/sticky_cart_bar.dart';
 import 'widgets/checkout_bottom_sheet.dart';
+import '../../core/widgets/sync_indicator.dart';
 
 import '../../memberships/data/membership_providers.dart';
 import '../../business/data/business_providers.dart';
@@ -69,6 +70,8 @@ class DashboardScreen extends ConsumerWidget {
             ? (isCancelled ? 'View Cancelled Order' : 'Edit Order')
             : 'TSP Dashboard'),
         actions: [
+          const SyncIndicator(),
+          const SizedBox(width: 8),
           businessAsync.when(
             data: (biz) {
               if (biz == null) return const SizedBox.shrink();

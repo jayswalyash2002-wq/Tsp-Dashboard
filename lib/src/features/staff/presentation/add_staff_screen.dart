@@ -45,7 +45,7 @@ class _AddStaffScreenState extends ConsumerState<AddStaffScreen> {
         );
 
     final state = ref.read(createInviteProvider);
-    if (state.hasValue && state.value != null && mounted) {
+    if (state.hasValue && state.value != null && context.mounted) {
       context.push(
         '/staff/invite-code',
         extra: {

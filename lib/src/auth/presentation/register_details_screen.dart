@@ -69,7 +69,7 @@ class _RegisterDetailsScreenState extends ConsumerState<RegisterDetailsScreen> {
       // Sync local state
       ref.read(deviceNameProvider.notifier).state = name;
 
-      if (!mounted) return;
+      if (!context.mounted) return;
       
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Account created successfully!')),
@@ -80,7 +80,7 @@ class _RegisterDetailsScreenState extends ConsumerState<RegisterDetailsScreen> {
       context.go('/dashboard');
 
     } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       String message = e.message ?? 'Unknown error';
       if (e.code == 'operation-not-allowed') {
         message = 'Email/Password accounts are not enabled in Firebase Console.';
@@ -89,7 +89,7 @@ class _RegisterDetailsScreenState extends ConsumerState<RegisterDetailsScreen> {
         SnackBar(content: Text('Auth Error: $message')),
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Registration failed: $e')),
       );
