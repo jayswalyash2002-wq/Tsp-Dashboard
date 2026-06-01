@@ -1,6 +1,6 @@
 {
-    "name": "tsp_dashboard",
-    "short_name": "tsp_dashboard",
+    "name": "TSP HQ",
+    "short_name": "TSP HQ",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

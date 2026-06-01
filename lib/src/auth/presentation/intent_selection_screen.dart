@@ -29,7 +29,7 @@ class IntentSelectionScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 24),
               const Text(
-                'TSP Dashboard',
+                'TSP HQ',
                 style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),

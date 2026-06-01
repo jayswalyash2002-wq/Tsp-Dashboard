@@ -280,7 +280,7 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
       debugPrint('SCANNED QR PAYLOAD: $result');
       try {
         if (!result.startsWith('TSPJOIN:')) {
-          _setError('Invalid QR format. Use a TSP Dashboard invite QR.');
+          _setError('Invalid QR format. Use a TSP HQ invite QR.');
           return;
         }
 

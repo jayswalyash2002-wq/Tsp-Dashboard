@@ -447,7 +447,7 @@ class _InviteDetailSheet extends ConsumerWidget {
               ),
               OutlinedButton.icon(
                 onPressed: () {
-                  Share.share('Join our team at TSP Dashboard!\nCode: ${invite.code}');
+                  Share.share('Join our team at TSP HQ!\nCode: ${invite.code}');
                 },
                 icon: const Icon(Icons.share),
                 label: const Text('Share'),

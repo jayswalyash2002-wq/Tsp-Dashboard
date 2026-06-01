@@ -96,7 +96,7 @@ class _InviteCodeScreenState extends ConsumerState<InviteCodeScreen> {
                     label: 'Share',
                     onTap: () {
                       Share.share(
-                        'Join our team at TSP Dashboard!\nInvite Code: ${widget.code}\nRole: ${widget.role.name.toUpperCase()}',
+                        'Join our team at TSP HQ!\nInvite Code: ${widget.code}\nRole: ${widget.role.name.toUpperCase()}',
                       );
                     },
                   ),

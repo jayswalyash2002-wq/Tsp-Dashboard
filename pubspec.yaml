@@ -1,5 +1,5 @@
 name: tsp_dashboard
-description: TSP Dashboard for Slow Pour beverage cart operations.
+description: TSP HQ for Slow Pour beverage cart operations.
 publish_to: "none"
 
 version: 0.1.0+1
@@ -58,5 +58,15 @@ dev_dependencies:
 
   flutter_lints: ^5.0.0
 
+  flutter_launcher_icons: ^0.14.3   # <-- ADD THIS
+
 flutter:
   uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/logo/app_icon.png"
+  image_path_android: "assets/logo/app_icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/logo/app_icon.png"

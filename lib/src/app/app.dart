@@ -15,7 +15,7 @@ class TspDashboardApp extends ConsumerWidget {
     final accentColor = ref.watch(accentColorProvider);
 
     return MaterialApp.router(
-      title: 'TSP Dashboard',
+      title: 'TSP HQ',
       debugShowCheckedModeBanner: false,
       theme: createAppTheme(Brightness.light, accentColor),
       darkTheme: createAppTheme(Brightness.dark, accentColor),
