@@ -7,9 +7,7 @@ import '../../core/firebase/firebase_providers.dart';
 import '../../core/format/money.dart';
 import '../../dashboard/domain/order_models.dart';
 import '../data/expense_providers.dart';
-import '../data/expense_repository.dart';
 import '../domain/expense.dart';
-import '../../core/widgets/responsive_widgets.dart';
 import '../domain/fund_movement.dart';
 
 import '../../activity_log/presentation/providers/activity_log_providers.dart';
@@ -225,7 +223,6 @@ class _ExpenseFilters extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final filter = ref.watch(expenseFilterProvider);
-    final cs = Theme.of(context).colorScheme;
 
     return SegmentedButton<ExpenseFilter>(
       showSelectedIcon: false,

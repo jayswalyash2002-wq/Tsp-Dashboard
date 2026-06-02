@@ -16,15 +16,15 @@ import '../../core/widgets/app_password_field.dart';
 import '../../auth/presentation/widgets/password_requirements_view.dart';
 import '../data/membership_providers.dart';
 
-class JoinBusinessPlaceholderScreen extends ConsumerStatefulWidget {
+class JoinBusinessScreen extends ConsumerStatefulWidget {
   final String? initialCode;
-  const JoinBusinessPlaceholderScreen({super.key, this.initialCode});
+  const JoinBusinessScreen({super.key, this.initialCode});
 
   @override
-  ConsumerState<JoinBusinessPlaceholderScreen> createState() => _JoinBusinessPlaceholderScreenState();
+  ConsumerState<JoinBusinessScreen> createState() => _JoinBusinessScreenState();
 }
 
-class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlaceholderScreen> {
+class _JoinBusinessScreenState extends ConsumerState<JoinBusinessScreen> {
   final _inviteController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -280,7 +280,7 @@ class _JoinBusinessPlaceholderScreenState extends ConsumerState<JoinBusinessPlac
       debugPrint('SCANNED QR PAYLOAD: $result');
       try {
         if (!result.startsWith('TSPJOIN:')) {
-          _setError('Invalid QR format. Use a TSP HQ invite QR.');
+          _setError('Invalid QR format. Use a TSP invite QR.');
           return;
         }
 

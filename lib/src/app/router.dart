@@ -10,7 +10,7 @@ import 'package:tsp_dashboard/src/auth/presentation/sign_up_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/forgot_password_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/intent_selection_screen.dart';
 import 'package:tsp_dashboard/src/core/firebase/firebase_providers.dart';
-import 'package:tsp_dashboard/src/memberships/presentation/join_business_placeholder_screen.dart';
+import 'package:tsp_dashboard/src/memberships/presentation/join_business_screen.dart';
 import 'package:tsp_dashboard/src/dashboard/presentation/dashboard_screen.dart';
 import 'package:tsp_dashboard/src/dashboard/presentation/edit_menu_screen.dart';
 import 'package:tsp_dashboard/src/dashboard/presentation/history_screen.dart';
@@ -109,7 +109,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             name: 'join',
             builder: (context, state) {
               final code = state.uri.queryParameters['code'];
-              return JoinBusinessPlaceholderScreen(initialCode: code);
+              return JoinBusinessScreen(initialCode: code);
             },
           ),
           GoRoute(

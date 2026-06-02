@@ -1,4 +1,4 @@
-# TSP HQ (Slow Pour)
+# TSP (Slow Pour)
 
 Operational-first Flutter app for fast beverage cart order punching.
 

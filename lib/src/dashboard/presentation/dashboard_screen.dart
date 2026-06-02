@@ -68,7 +68,7 @@ class DashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(orderState.isEditing
             ? (isCancelled ? 'View Cancelled Order' : 'Edit Order')
-            : 'TSP HQ'),
+            : 'TSP'),
         actions: [
           const SyncIndicator(),
           const SizedBox(width: 8),
