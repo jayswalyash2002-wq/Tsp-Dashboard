@@ -7,6 +7,8 @@ import '../../core/rbac/permission.dart';
 import '../../core/rbac/permission_gate.dart';
 import '../../core/theme/theme_providers.dart';
 import '../../business/application/business_service.dart';
+import '../../features/business/widgets/menu_qr_card.dart';
+import 'package:flutter/foundation.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -39,6 +41,9 @@ class SettingsScreen extends ConsumerWidget {
           const SizedBox(height: 24),
           _SectionHeader(title: 'BUSINESS HOURS'),
           const _BusinessHoursSection(),
+          const SizedBox(height: 24),
+          _SectionHeader(title: 'MENU QR CODE'),
+          const _MenuQrSection(),
         ],
       ),
     );
@@ -201,6 +206,36 @@ class _BusinessSettingsSection extends ConsumerWidget {
             title: 'Edit Business Details',
             subtitle: 'Update address, contact, and GST info',
             onTap: () => context.push('/business-setup?id=${business.id}'),
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _MenuQrSection extends ConsumerWidget {
+  const _MenuQrSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final businessAsync = ref.watch(currentBusinessProvider);
+    
+    // For production, this should come from a config provider or environment variable.
+    // Defaulting to a common Firebase Hosting pattern if not on web.
+    final String hostingUrl = kIsWeb 
+        ? Uri.base.origin 
+        : 'https://tsp-dashboard-88.web.app'; 
+
+    return businessAsync.maybeWhen(
+      data: (business) {
+        if (business == null) return const SizedBox.shrink();
+        return PermissionGate(
+          permission: Permission.accessSettings,
+          child: MenuQrCard(
+            businessId: business.id,
+            businessName: business.businessName,
+            hostingUrl: hostingUrl,
           ),
         );
       },

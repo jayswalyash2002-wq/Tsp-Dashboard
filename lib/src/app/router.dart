@@ -29,6 +29,7 @@ import 'package:tsp_dashboard/src/features/staff/presentation/pending_invites_sc
 import 'package:tsp_dashboard/src/activity_log/presentation/screens/activity_log_screen.dart';
 import 'package:tsp_dashboard/src/analytics/presentation/analytics_screen.dart';
 import 'package:tsp_dashboard/src/app/shell_scaffold.dart';
+import 'package:tsp_dashboard/src/features/public_menu/presentation/public_menu_screen.dart';
 import 'package:tsp_dashboard/src/constants/roles.dart'; // Added for extra param casting
 
 import 'package:tsp_dashboard/src/core/rbac/permission.dart';
@@ -47,10 +48,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       
       final isAuthPath = path.startsWith('/auth');
       final isBusinessSetup = path.startsWith('/business-setup');
+      final isPublicMenu = path.startsWith('/menu');
       final isOnboarding = path == '/onboarding' || path == '/';
 
-      // 1. Unauthenticated users should be on /auth, /business-setup, or /onboarding (root)
-      if (user == null && !isAuthPath && !isBusinessSetup && !isOnboarding) {
+      // 1. Unauthenticated users should be on /auth, /business-setup, /menu, or /onboarding (root)
+      if (user == null && !isAuthPath && !isBusinessSetup && !isOnboarding && !isPublicMenu) {
         return '/onboarding';
       }
 
@@ -85,6 +87,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/menu/business/:businessId',
+        builder: (context, state) {
+          final businessId = state.pathParameters['businessId']!;
+          final table = state.uri.queryParameters['table'];
+          return PublicMenuScreen(businessId: businessId, table: table);
+        },
+      ),
       GoRoute(
         path: '/auth/forgot-password',
         name: 'forgot-password',
