@@ -75,7 +75,7 @@ class MenuRepository {
       final data = snap.data()!;
       final existingBusinessId = data['businessId']?.toString();
       
-      if (existingBusinessId != _businessId) {
+      if (existingBusinessId != null && existingBusinessId.isNotEmpty && existingBusinessId != _businessId) {
         if (kDebugMode) {
           debugPrint('CRITICAL: Blocked unauthorized update attempt on menu item ${item.id}. '
               'Expected: $_businessId, Found: $existingBusinessId');

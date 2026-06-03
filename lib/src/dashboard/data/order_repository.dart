@@ -52,16 +52,20 @@ class OrderRepository {
             .map((doc) => SavedOrder.fromMap(doc.id, doc.data()))
             .toList());
 
-    // Merge with local unsynced orders to ensure optimistic updates are visible
+    // Merge with local orders to ensure optimistic updates and incorrectly synced orders (missing businessId) are visible
     return firestoreStream.map((remoteOrders) {
-      final localUnsynced = _localDb.getUnsyncedOrders();
+      final localAll = _localDb.getAllOrders();
       
-      // Filter out remote orders that are actually the same as local unsynced ones
-      // (though they shouldn't be remote yet if they are unsynced)
-      final localIds = localUnsynced.map((o) => o.id).toSet();
-      final filteredRemote = remoteOrders.where((o) => !localIds.contains(o.id)).toList();
+      // Filter local orders by businessId
+      // Legacy orders (missing businessId) are included to recover them
+      final localForBusiness = localAll.where((o) => 
+        o.businessId == _businessId || o.businessId.isEmpty
+      ).toList();
       
-      final merged = [...localUnsynced, ...filteredRemote];
+      final remoteIds = remoteOrders.map((o) => o.id).toSet();
+      final localOnly = localForBusiness.where((o) => !remoteIds.contains(o.id)).toList();
+      
+      final merged = [...localOnly, ...remoteOrders];
       merged.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       return merged;
     });
@@ -78,6 +82,7 @@ class OrderRepository {
     // 1. Create the model with SyncMetadata
     final order = draft.toOrder(
       id: orderId,
+      businessId: _businessId,
       timestamp: now,
       deviceName: deviceName,
       userEmail: user.email ?? 'unknown',
@@ -149,6 +154,12 @@ class OrderRepository {
         if (customerId != null) {
           firestoreMap['customerId'] = customerId;
         }
+        
+        if (kDebugMode) {
+          debugPrint('ORDER_REPO: Syncing Order to Firestore -> ID: ${order.id}');
+          debugPrint('ORDER_REPO: Data: $firestoreMap');
+        }
+
         tx.set(orderRef, firestoreMap);
       });
 
@@ -182,7 +193,7 @@ class OrderRepository {
       final orderData = orderSnap.data()!;
       final existingBusinessId = orderData['businessId']?.toString();
       
-      if (existingBusinessId != _businessId) {
+      if (existingBusinessId != null && existingBusinessId.isNotEmpty && existingBusinessId != _businessId) {
         if (kDebugMode) {
           debugPrint('CRITICAL: Blocked unauthorized order update attempt. '
               'Expected: $_businessId, Found: $existingBusinessId');
@@ -265,6 +276,7 @@ class OrderRepository {
       );
 
       tx.update(orderRef, {
+        'businessId': _businessId, // Healing: ensure businessId exists
         'items': [
           for (final l in newOrder.lines)
             {
@@ -312,7 +324,7 @@ class OrderRepository {
       if (!snap.exists) throw Exception('Order not found');
       
       final existingBusinessId = snap.data()?['businessId']?.toString();
-      if (existingBusinessId != _businessId) {
+      if (existingBusinessId != null && existingBusinessId.isNotEmpty && existingBusinessId != _businessId) {
         if (kDebugMode) {
           debugPrint('CRITICAL: Blocked unauthorized order status update. '
               'Expected: $_businessId, Found: $existingBusinessId');
@@ -321,6 +333,7 @@ class OrderRepository {
       }
 
       final Map<String, dynamic> updates = {
+        'businessId': _businessId, // Healing
         'status': newStatus.name,
         'updatedAt': FieldValue.serverTimestamp(),
         'updatedBy': _auth.currentUser?.uid,
@@ -372,8 +385,8 @@ class OrderRepository {
       final orderData = snap.data()!;
       final existingBusinessId = orderData['businessId']?.toString();
 
-      // Verify business ownership
-      if (existingBusinessId != _businessId) {
+      // Verify business ownership (Allow null/empty for legacy order healing)
+      if (existingBusinessId != null && existingBusinessId.isNotEmpty && existingBusinessId != _businessId) {
         throw Exception('Access Denied: Business ownership mismatch');
       }
 
@@ -394,6 +407,7 @@ class OrderRepository {
 
       // 4. WRITE updated order
       tx.update(orderRef, {
+        'businessId': _businessId, // Healing
         'status': OrderStatus.cancelled.name,
         'cancellationReason': reason?.name,
         'cancelledBy': cancelledBy,

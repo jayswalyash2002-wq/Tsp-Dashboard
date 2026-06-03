@@ -120,9 +120,21 @@ class Expense {
   }
 
   Map<String, dynamic> toLocalMap() {
-    final map = toFirestoreMap();
-    map['timestamp'] = timestamp.toIso8601String();
+    final map = <String, dynamic>{
+      'amountPaise': amountPaise,
+      'category': category,
+      'paymentMethod': paymentMethod.name,
+      'notes': notes,
+      'createdBy': createdBy,
+      'timestamp': timestamp.toIso8601String(),
+      'timestampMs': timestampMs,
+      'expenseStatus': expenseStatus,
+    };
+    if (businessId != null) map['businessId'] = businessId;
+    if (payableTo != null) map['payableTo'] = payableTo;
     if (settledAt != null) map['settledAt'] = settledAt!.toIso8601String();
+    if (settledBy != null) map['settledBy'] = settledBy;
+
     final s = syncMetadata;
     if (s != null) {
       map['syncMetadata'] = s.toMap();

@@ -172,7 +172,7 @@ class ExpenseRepository {
       final expenseData = expenseSnap.data()!;
       final existingBusinessId = expenseData['businessId']?.toString();
       
-      if (existingBusinessId != _businessId) {
+      if (existingBusinessId != null && existingBusinessId.isNotEmpty && existingBusinessId != _businessId) {
         if (kDebugMode) {
           debugPrint('CRITICAL: Blocked unauthorized expense delete attempt. '
               'Expected: $_businessId, Found: $existingBusinessId');

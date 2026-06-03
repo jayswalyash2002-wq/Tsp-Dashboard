@@ -204,6 +204,7 @@ class OrderDraft {
 
   SavedOrder toOrder({
     required String id,
+    required String businessId,
     required DateTime timestamp,
     required String deviceName,
     required String userEmail,
@@ -211,6 +212,7 @@ class OrderDraft {
   }) {
     return SavedOrder(
       id: id,
+      businessId: businessId,
       timestamp: timestamp,
       deviceName: deviceName,
       userEmail: userEmail,
@@ -232,6 +234,7 @@ class OrderDraft {
 class SavedOrder extends OrderDraft {
   SavedOrder({
     required this.id,
+    required this.businessId,
     required this.timestamp,
     required this.deviceName,
     required this.userEmail,
@@ -271,6 +274,7 @@ class SavedOrder extends OrderDraft {
         );
 
   final String id;
+  final String businessId;
   final DateTime timestamp;
   final String deviceName;
   final String userEmail;
@@ -298,70 +302,85 @@ class SavedOrder extends OrderDraft {
       status != OrderStatus.cancelled && status != OrderStatus.refunded;
 
   factory SavedOrder.fromMap(String id, Map<String, dynamic> map) {
-    final discount = map['discount'] as Map<String, dynamic>;
-    final payment = map['payment'] as Map<String, dynamic>;
-    final items = map['items'] as List<dynamic>;
-    final user = map['loggedInUser'] as Map<String, dynamic>;
+    Map<String, dynamic> getMap(dynamic val) {
+      if (val == null) return {};
+      if (val is Map) return Map<String, dynamic>.from(val);
+      return {};
+    }
+
+    final discount = getMap(map['discount']);
+    final payment = getMap(map['payment']);
+    final items = (map['items'] as List<dynamic>?) ?? [];
+    final user = getMap(map['loggedInUser']);
 
     DateTime? parseDate(dynamic val) {
       if (val == null) return null;
       if (val is Timestamp) return val.toDate();
-      if (val is String) return DateTime.parse(val);
+      if (val is String) return DateTime.tryParse(val);
+      if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
       return null;
     }
 
+    final orderId = map['orderId']?.toString() ?? id;
+
     return SavedOrder(
-      id: id,
+      id: orderId,
+      businessId: map['businessId']?.toString() ?? '',
       timestamp: parseDate(map['timestamp']) ?? DateTime.now(),
-      deviceName: map['deviceName'] as String,
-      userEmail: user['email'] as String,
-      userId: user['uid'] as String,
-      status: OrderStatus.fromString(map['status']),
+      deviceName: map['deviceName']?.toString() ?? 'Unknown',
+      userEmail: user['email']?.toString() ?? 'unknown',
+      userId: user['uid']?.toString() ?? 'unknown',
+      status: OrderStatus.fromString(map['status']?.toString()),
       createdAt: parseDate(map['createdAt']),
       preparingAt: parseDate(map['preparingAt']),
       completedAt: parseDate(map['completedAt']),
       servedAt: parseDate(map['servedAt']),
-      cancellationReason: map['cancellationReason'] as String?,
-      cancelledBy: map['cancelledBy'] as String?,
+      cancellationReason: map['cancellationReason']?.toString(),
+      cancelledBy: map['cancelledBy']?.toString(),
       cancelledAt: parseDate(map['cancelledAt']),
       refundRequired: map['refundRequired'] ?? false,
       inventoryDeducted: map['inventoryDeducted'] ?? false,
-      customerName: map['customerName'] as String?,
-      customerPhone: map['customerPhone'] as String?,
-      customerId: map['customerId'] as String?,
+      customerName: map['customerName']?.toString(),
+      customerPhone: map['customerPhone']?.toString(),
+      customerId: map['customerId']?.toString(),
       lines: items
-          .map((i) => OrderLine(
-                  item: MenuItem(
-                    id: i['itemId'],
-                    name: i['name'],
-                    category: i['category'],
-                    pricePaise: i['pricePaise'],
-                    available: true,
-                    consumableMappings: (i['consumableMappings'] as Map<dynamic, dynamic>?)?.map(
-                          (key, value) => MapEntry(
-                            key.toString(),
-                            value is int ? value : (int.tryParse(value.toString()) ?? 0),
-                          ),
-                        ) ??
-                        {},
+          .map((i) {
+            final itemMap = getMap(i);
+            return OrderLine(
+              item: MenuItem(
+                id: itemMap['itemId']?.toString() ?? '',
+                name: itemMap['name']?.toString() ?? 'Unknown',
+                category: itemMap['category']?.toString() ?? 'General',
+                pricePaise: itemMap['pricePaise'] ?? 0,
+                available: true,
+                consumableMappings: getMap(itemMap['consumableMappings']).map(
+                  (key, value) => MapEntry(
+                    key.toString(),
+                    value is int ? value : (int.tryParse(value.toString()) ?? 0),
                   ),
-                qty: i['qty'],
-              ))
+                ),
+              ),
+              qty: itemMap['qty'] ?? 0,
+            );
+          })
           .toList(),
-      discountType: DiscountType.fromString(discount['type']),
-      discountValue: discount['value'],
-      discountReason: DiscountReason.fromString(discount['reason']),
-      paymentMethod: PaymentMethod.fromString(payment['method']),
-      paymentStatus: PaymentStatus.fromString(payment['status']),
+      discountType: DiscountType.fromString(discount['type']?.toString()),
+      discountValue: discount['value'] ?? 0,
+      discountReason: DiscountReason.fromString(discount['reason']?.toString()),
+      paymentMethod: PaymentMethod.fromString(payment['method']?.toString()),
+      paymentStatus: PaymentStatus.fromString(payment['status']?.toString()),
       splitLines: (payment['splitLines'] as List<dynamic>?)
-              ?.map((s) => SplitLine(
-                    method: PaymentMethod.fromString(s['method']),
-                    amountPaise: s['amountPaise'],
-                  ))
+              ?.map((s) {
+                final sMap = getMap(s);
+                return SplitLine(
+                    method: PaymentMethod.fromString(sMap['method']?.toString()),
+                    amountPaise: sMap['amountPaise'] ?? 0,
+                  );
+              })
               .toList() ??
           [],
       syncMetadata: map['syncMetadata'] != null 
-          ? SyncMetadata.fromMap(Map<String, dynamic>.from(map['syncMetadata'])) 
+          ? SyncMetadata.fromMap(getMap(map['syncMetadata']))
           : null,
     );
   }
@@ -376,6 +395,7 @@ class SavedOrder extends OrderDraft {
     PaymentStatus? paymentStatus,
     List<SplitLine>? splitLines,
     String? id,
+    String? businessId,
     DateTime? timestamp,
     String? deviceName,
     String? userEmail,
@@ -397,6 +417,7 @@ class SavedOrder extends OrderDraft {
   }) {
     return SavedOrder(
       id: id ?? this.id,
+      businessId: businessId ?? this.businessId,
       timestamp: timestamp ?? this.timestamp,
       deviceName: deviceName ?? this.deviceName,
       userEmail: userEmail ?? this.userEmail,
@@ -428,6 +449,7 @@ class SavedOrder extends OrderDraft {
   Map<String, dynamic> toFirestoreMap() {
     final Map<String, dynamic> data = <String, dynamic>{};
     data['orderId'] = id;
+    data['businessId'] = businessId;
     data['timestamp'] = Timestamp.fromDate(timestamp);
     data['deviceName'] = deviceName;
     data['loggedInUser'] = {'uid': userId, 'email': userEmail};
@@ -470,18 +492,57 @@ class SavedOrder extends OrderDraft {
   }
 
   Map<String, dynamic> toLocalMap() {
-    final Map<String, dynamic> map = toFirestoreMap();
-    map['timestamp'] = timestamp.toIso8601String();
-    if (createdAt != null) map['createdAt'] = createdAt!.toIso8601String();
-    if (preparingAt != null) map['preparingAt'] = preparingAt!.toIso8601String();
-    if (completedAt != null) map['completedAt'] = completedAt!.toIso8601String();
-    if (servedAt != null) map['servedAt'] = servedAt!.toIso8601String();
-    if (cancelledAt != null) map['cancelledAt'] = cancelledAt!.toIso8601String();
+    final Map<String, dynamic> data = <String, dynamic>{};
+    data['orderId'] = id;
+    data['businessId'] = businessId;
+    data['timestamp'] = timestamp.toIso8601String();
+    data['deviceName'] = deviceName;
+    data['loggedInUser'] = {'uid': userId, 'email': userEmail};
+    data['status'] = status.name;
+    data['createdAt'] = (createdAt ?? timestamp).toIso8601String();
+    data['updatedAt'] = DateTime.now().toIso8601String();
+
+    final List<Map<String, dynamic>> itemsList = [];
+    for (final OrderLine ol in lines) {
+      final Map<String, dynamic> itemMap = <String, dynamic>{};
+      itemMap['itemId'] = ol.item.id;
+      itemMap['name'] = ol.item.name;
+      itemMap['category'] = ol.item.category;
+      itemMap['pricePaise'] = ol.item.pricePaise;
+      itemMap['qty'] = ol.qty;
+      itemMap['lineTotalPaise'] = ol.lineTotalPaise;
+      itemMap['consumableMappings'] = ol.item.consumableMappings;
+      itemsList.add(itemMap);
+    }
+    data['items'] = itemsList;
+
+    data['subtotalPaise'] = subtotalPaise;
+    data['discount'] = {
+      'type': discountType.name,
+      'value': discountValue,
+      'reason': discountReason?.name,
+      'discountPaise': discountPaise,
+    };
+    data['totalPaise'] = totalPaise;
+    data['payment'] = {
+      'method': paymentMethod.name,
+      'status': paymentStatus.name,
+      'splitLines': splitLines.map((s) => s.toMap()).toList(),
+    };
+    data['customerName'] = customerName;
+    data['customerPhone'] = customerPhone;
+    data['customerId'] = customerId;
+    data['inventoryDeducted'] = inventoryDeducted;
+
+    if (preparingAt != null) data['preparingAt'] = preparingAt!.toIso8601String();
+    if (completedAt != null) data['completedAt'] = completedAt!.toIso8601String();
+    if (servedAt != null) data['servedAt'] = servedAt!.toIso8601String();
+    if (cancelledAt != null) data['cancelledAt'] = cancelledAt!.toIso8601String();
     
     final s = syncMetadata;
     if (s != null) {
-      map['syncMetadata'] = s.toMap();
+      data['syncMetadata'] = s.toMap();
     }
-    return map;
+    return data;
   }
 }

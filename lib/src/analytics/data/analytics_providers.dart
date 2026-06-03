@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/data/auth_providers.dart';
 import '../../business/data/business_providers.dart';
 import '../../core/firebase/firebase_providers.dart';
+import '../../core/sync/local_database_service.dart';
 import '../../core/utils/datetime_utils.dart';
 import '../../dashboard/domain/order_models.dart';
 import '../../expenses/domain/expense.dart';
@@ -13,7 +14,8 @@ import 'analytics_repository.dart';
 final analyticsRepositoryProvider = Provider<AnalyticsRepository>((ref) {
   final db = ref.watch(firestoreProvider);
   final businessId = ref.watch(userBusinessIdProvider);
-  return AnalyticsRepository(db, businessId ?? '');
+  final localDb = ref.watch(localDatabaseServiceProvider);
+  return AnalyticsRepository(db, businessId ?? '', localDb);
 });
 
 final analyticsDateRangeProvider = StateProvider<AnalyticsDateRange>((ref) => AnalyticsDateRange.today);

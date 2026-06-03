@@ -221,7 +221,7 @@ class StaffRepository {
       if (!snap.exists) throw Exception('User not found');
       
       final existingBusinessId = snap.data()?['businessId']?.toString();
-      if (existingBusinessId != _businessId) {
+      if (existingBusinessId != null && existingBusinessId.isNotEmpty && existingBusinessId != _businessId) {
         debugPrint('CRITICAL: Blocked unauthorized staff role update. '
             'Expected: $_businessId, Found: $existingBusinessId');
         throw Exception('Access Denied: Business ownership mismatch');
@@ -245,7 +245,7 @@ class StaffRepository {
       if (!snap.exists) throw Exception('User not found');
       
       final existingBusinessId = snap.data()?['businessId']?.toString();
-      if (existingBusinessId != _businessId) {
+      if (existingBusinessId != null && existingBusinessId.isNotEmpty && existingBusinessId != _businessId) {
         debugPrint('CRITICAL: Blocked unauthorized staff status toggle. '
             'Expected: $_businessId, Found: $existingBusinessId');
         throw Exception('Access Denied: Business ownership mismatch');
