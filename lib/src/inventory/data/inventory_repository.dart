@@ -32,6 +32,9 @@ class InventoryRepository {
     if (deductions.isEmpty) return;
 
     await _db.runTransaction((transaction) async {
+      final List<_InventoryUpdate> updates = [];
+
+      // 1. READ PHASE
       for (final entry in deductions.entries) {
         final itemId = entry.key;
         final qtyToDeduct = entry.value;
@@ -44,15 +47,24 @@ class InventoryRepository {
           final currentStock = data['stock'] ?? 0;
           final itemName = data['name'] ?? 'Unknown';
           
-          debugPrint('INVENTORY_REPO: Deducting $qtyToDeduct from $itemName (Current: $currentStock)');
-          
-          transaction.update(docRef, {
-            'stock': currentStock - qtyToDeduct,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+          updates.add(_InventoryUpdate(
+            ref: docRef,
+            newStock: currentStock - qtyToDeduct,
+            itemName: itemName,
+            qtyDeducted: qtyToDeduct,
+          ));
         } else {
           debugPrint('INVENTORY_REPO: WARNING - Inventory item $itemId not found for deduction');
         }
+      }
+
+      // 2. WRITE PHASE
+      for (final update in updates) {
+        debugPrint('INVENTORY_REPO: Deducting ${update.qtyDeducted} from ${update.itemName} (New Stock: ${update.newStock})');
+        transaction.update(update.ref, {
+          'stock': update.newStock,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
       }
     });
   }
@@ -61,6 +73,9 @@ class InventoryRepository {
     if (restorations.isEmpty) return;
 
     await _db.runTransaction((transaction) async {
+      final List<_InventoryUpdate> updates = [];
+
+      // 1. READ PHASE
       for (final entry in restorations.entries) {
         final itemId = entry.key;
         final qtyToRestore = entry.value;
@@ -70,12 +85,34 @@ class InventoryRepository {
 
         if (snap.exists) {
           final currentStock = (snap.data() as Map<String, dynamic>)['stock'] ?? 0;
-          transaction.update(docRef, {
-            'stock': currentStock + qtyToRestore,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+          updates.add(_InventoryUpdate(
+            ref: docRef,
+            newStock: currentStock + qtyToRestore,
+          ));
         }
+      }
+
+      // 2. WRITE PHASE
+      for (final update in updates) {
+        transaction.update(update.ref, {
+          'stock': update.newStock,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
       }
     });
   }
+}
+
+class _InventoryUpdate {
+  final DocumentReference ref;
+  final int newStock;
+  final String? itemName;
+  final int? qtyDeducted;
+
+  _InventoryUpdate({
+    required this.ref,
+    required this.newStock,
+    this.itemName,
+    this.qtyDeducted,
+  });
 }

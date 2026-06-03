@@ -114,12 +114,13 @@ class OrderRepository {
     
     try {
       await _db.runTransaction((tx) async {
+        // 1. READ PHASE
         final balancesSnap = await tx.get(balancesRef);
         final now = DateTime.now();
         
-        String? customerId;
+        _CustomerUpdate? customerUpdate;
         if (order.paymentStatus == PaymentStatus.paid) {
-          customerId = await _handleCustomerUpdate(
+          customerUpdate = await _prepareCustomerUpdate(
             tx,
             order.customerPhone,
             order.customerName,
@@ -128,6 +129,7 @@ class OrderRepository {
           );
         }
 
+        // 2. WRITE PHASE
         if (order.paymentStatus == PaymentStatus.paid) {
           final data = balancesSnap.data() ?? {};
           int cash = data['cashBalancePaise'] ?? 0;
@@ -150,14 +152,17 @@ class OrderRepository {
           );
         }
 
+        if (customerUpdate != null) {
+          tx.set(customerUpdate.ref, customerUpdate.data);
+        }
+
         final firestoreMap = order.toFirestoreMap();
-        if (customerId != null) {
-          firestoreMap['customerId'] = customerId;
+        if (customerUpdate?.id != null) {
+          firestoreMap['customerId'] = customerUpdate!.id;
         }
         
         if (kDebugMode) {
           debugPrint('ORDER_REPO: Syncing Order to Firestore -> ID: ${order.id}');
-          debugPrint('ORDER_REPO: Data: $firestoreMap');
         }
 
         tx.set(orderRef, firestoreMap);
@@ -184,7 +189,7 @@ class OrderRepository {
     }
 
     await _db.runTransaction((tx) async {
-      // 1. PERFORM ALL READS FIRST & VALIDATE
+      // 1. READ PHASE
       final orderSnap = await tx.get(orderRef);
       if (!orderSnap.exists) {
         throw Exception('Order not found');
@@ -204,33 +209,31 @@ class OrderRepository {
       final balancesSnap = await tx.get(balancesRef);
 
       final now = DateTime.now();
-      String? customerId = newOrder.customerId;
+      _CustomerUpdate? oldCustomerUpdate;
+      _CustomerUpdate? newCustomerUpdate;
 
-      // Handle customer stat updates if payment status changed or amount changed
+      // Prepare customer updates (READS inside)
       if (newOrder.paymentStatus == PaymentStatus.paid) {
-        // If it was already paid, we adjust the spent amount if it changed
-        // If it was not paid, we add it as a new order for the customer
         int spentAdjustment = newOrder.totalPaise;
         int orderCountAdjustment = 1;
 
         if (oldOrder.paymentStatus == PaymentStatus.paid) {
           spentAdjustment = newOrder.totalPaise - oldOrder.totalPaise;
-          orderCountAdjustment = 0; // Already counted
+          orderCountAdjustment = 0;
         }
 
-        // Check if customer changed
         final oldNormalized = oldOrder.customerPhone?.trim().replaceAll(RegExp(r'[^0-9]'), '');
         final newNormalized = newOrder.customerPhone?.trim().replaceAll(RegExp(r'[^0-9]'), '');
 
         if (oldOrder.paymentStatus == PaymentStatus.paid && oldNormalized != newNormalized && oldNormalized != null) {
-          // Revert old customer stats
-          await _handleCustomerUpdate(tx, oldOrder.customerPhone, oldOrder.customerName, -oldOrder.totalPaise, now, countAdjustment: -1);
-          // Re-apply to new customer as a full new order
+          // Revert old customer
+          oldCustomerUpdate = await _prepareCustomerUpdate(tx, oldOrder.customerPhone, oldOrder.customerName, -oldOrder.totalPaise, now, countAdjustment: -1);
+          // New customer full apply
           spentAdjustment = newOrder.totalPaise;
           orderCountAdjustment = 1;
         }
 
-        customerId = await _handleCustomerUpdate(
+        newCustomerUpdate = await _prepareCustomerUpdate(
           tx,
           newOrder.customerPhone,
           newOrder.customerName,
@@ -239,24 +242,27 @@ class OrderRepository {
           countAdjustment: orderCountAdjustment,
         );
       } else if (oldOrder.paymentStatus == PaymentStatus.paid) {
-        // Payment was reverted from Paid to Pending - revert customer stats
-        await _handleCustomerUpdate(tx, oldOrder.customerPhone, oldOrder.customerName, -oldOrder.totalPaise, now, countAdjustment: -1);
-        customerId = null;
+        oldCustomerUpdate = await _prepareCustomerUpdate(tx, oldOrder.customerPhone, oldOrder.customerName, -oldOrder.totalPaise, now, countAdjustment: -1);
       }
 
-      // 2. PERFORM ALL WRITES
+      // 2. WRITE PHASE
+      if (oldCustomerUpdate != null) {
+        tx.set(oldCustomerUpdate.ref, oldCustomerUpdate.data);
+      }
+      if (newCustomerUpdate != null) {
+        tx.set(newCustomerUpdate.ref, newCustomerUpdate.data);
+      }
+
       final data = balancesSnap.data() ?? {};
       int cash = data['cashBalancePaise'] ?? 0;
       int bank = data['bankBalancePaise'] ?? 0;
 
-      // Remove old order impact if it was paid
       if (oldOrder.paymentStatus == PaymentStatus.paid) {
         final oldImpact = _calculateImpact(oldOrder);
         cash -= oldImpact.cash;
         bank -= oldImpact.bank;
       }
 
-      // Add new order impact if it is paid
       if (newOrder.paymentStatus == PaymentStatus.paid) {
         final newImpact = _calculateImpact(newOrder);
         cash += newImpact.cash;
@@ -275,8 +281,10 @@ class OrderRepository {
         SetOptions(merge: true),
       );
 
+      final String? customerId = newCustomerUpdate?.id ?? (newOrder.paymentStatus == PaymentStatus.paid ? newOrder.customerId : null);
+
       tx.update(orderRef, {
-        'businessId': _businessId, // Healing: ensure businessId exists
+        'businessId': _businessId,
         'items': [
           for (final l in newOrder.lines)
             {
@@ -491,7 +499,7 @@ class OrderRepository {
     return _Impact(cash, bank);
   }
 
-  Future<String?> _handleCustomerUpdate(
+  Future<_CustomerUpdate?> _prepareCustomerUpdate(
     Transaction tx,
     String? phone,
     String? name,
@@ -512,6 +520,7 @@ class OrderRepository {
 
     final customerSnap = await tx.get(customerRef);
 
+    Map<String, dynamic> data;
     if (customerSnap.exists) {
       final customer = Customer.fromMap(customerSnap.id, customerSnap.data()!);
       final updatedCustomer = customer.copyWith(
@@ -521,7 +530,7 @@ class OrderRepository {
         lastVisit: countAdjustment > 0 ? now : customer.lastVisit,
         updatedAt: now,
       );
-      tx.set(customerRef, updatedCustomer.toMap());
+      data = updatedCustomer.toMap();
     } else if (countAdjustment >= 0) {
       final newCustomer = Customer(
         id: normalizedPhone,
@@ -533,11 +542,20 @@ class OrderRepository {
         createdAt: now,
         updatedAt: now,
       );
-      tx.set(customerRef, newCustomer.toMap());
+      data = newCustomer.toMap();
+    } else {
+      return null;
     }
 
-    return normalizedPhone;
+    return _CustomerUpdate(customerRef, data, normalizedPhone);
   }
+}
+
+class _CustomerUpdate {
+  final DocumentReference ref;
+  final Map<String, dynamic> data;
+  final String id;
+  _CustomerUpdate(this.ref, this.data, this.id);
 }
 
 class _Impact {

@@ -101,8 +101,12 @@ class ExpenseRepository {
 
         // 2. CALCULATE BALANCES
         final data = balancesSnap.data() ?? {};
-        int cash = data['cashBalancePaise'] ?? 0;
-        int bank = data['bankBalancePaise'] ?? 0;
+        // Use unified field names 'cash' and 'bank'
+        int cash = data['cash'] ?? data['cashBalancePaise'] ?? 0;
+        int bank = data['bank'] ?? data['bankBalancePaise'] ?? 0;
+
+        final int initialCash = cash;
+        final int initialBank = bank;
 
         if (oldExpense != null && oldExpense.expenseStatus == 'settled') {
           if (oldExpense.paymentMethod == PaymentMethod.cash) {
@@ -120,6 +124,15 @@ class ExpenseRepository {
           }
         }
 
+        if (kDebugMode) {
+          debugPrint('EXPENSE_REPO: Sync Expense');
+          debugPrint('  Status: ${expense.expenseStatus}');
+          debugPrint('  Method: ${expense.paymentMethod.name}');
+          debugPrint('  Amount: ${expense.amountPaise}');
+          debugPrint('  Balance Before: Cash=$initialCash, Bank=$initialBank');
+          debugPrint('  Balance After: Cash=$cash, Bank=$bank');
+        }
+
         // 3. WRITES
         tx.set(expenseRef, {
           ...expense.toFirestoreMap(),
@@ -134,6 +147,10 @@ class ExpenseRepository {
           balancesRef,
           {
             'businessId': _businessId,
+            'cash': cash,
+            'bank': bank,
+            'last_updated_at': FieldValue.serverTimestamp(),
+            // Maintain legacy fields for compatibility during transition
             'cashBalancePaise': cash,
             'bankBalancePaise': bank,
             'updatedAt': FieldValue.serverTimestamp(),
@@ -184,8 +201,11 @@ class ExpenseRepository {
       
       // 2. CALCULATE BALANCES
       final data = balancesSnap.data() ?? {};
-      int cash = data['cashBalancePaise'] ?? 0;
-      int bank = data['bankBalancePaise'] ?? 0;
+      int cash = data['cash'] ?? data['cashBalancePaise'] ?? 0;
+      int bank = data['bank'] ?? data['bankBalancePaise'] ?? 0;
+
+      final int initialCash = cash;
+      final int initialBank = bank;
 
       final actualExpense = Expense.fromMap(expenseSnap.id, expenseData);
 
@@ -198,12 +218,23 @@ class ExpenseRepository {
         }
       }
 
+      if (kDebugMode) {
+        debugPrint('EXPENSE_REPO: Delete Expense ${expense.id}');
+        debugPrint('  Status: ${actualExpense.expenseStatus}');
+        debugPrint('  Balance Before: Cash=$initialCash, Bank=$initialBank');
+        debugPrint('  Balance After: Cash=$cash, Bank=$bank');
+      }
+
       // 3. WRITES
       tx.delete(expenseRef);
       tx.set(
         balancesRef,
         {
           'businessId': _businessId,
+          'cash': cash,
+          'bank': bank,
+          'last_updated_at': FieldValue.serverTimestamp(),
+          // Maintain legacy fields
           'cashBalancePaise': cash,
           'bankBalancePaise': bank,
           'updatedAt': FieldValue.serverTimestamp(),

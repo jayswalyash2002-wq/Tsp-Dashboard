@@ -46,6 +46,11 @@ enum ActivityAction {
   // Financial
   balanceUpdated,
   fundAdded,
+  fundModified,
+  fundDeleted,
+  transferCreated,
+  transferModified,
+  transferDeleted,
   paymentRecorded,
 }
 

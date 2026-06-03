@@ -8,11 +8,16 @@ import '../../core/format/money.dart';
 import '../../dashboard/domain/order_models.dart';
 import '../data/expense_providers.dart';
 import '../domain/expense.dart';
-import '../domain/fund_movement.dart';
 
 import '../../activity_log/presentation/providers/activity_log_providers.dart';
 import '../../activity_log/domain/entities/activity_log_enums.dart';
 import '../../core/widgets/sync_indicator.dart';
+
+import 'package:uuid/uuid.dart';
+import '../../finance/domain/models/finance_transaction.dart';
+import '../../finance/domain/models/finance_enums.dart';
+import '../../finance/domain/models/finance_balance.dart';
+import '../../finance/presentation/providers/finance_providers.dart';
 
 class ExpensesScreen extends ConsumerWidget {
   const ExpensesScreen({super.key});
@@ -21,8 +26,8 @@ class ExpensesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final expensesAsync = ref.watch(expensesProvider);
     final filteredExpensesAsync = ref.watch(filteredExpensesProvider);
-    final balancesAsync = ref.watch(balancesProvider);
-    final fundMovementsAsync = ref.watch(fundMovementsProvider);
+    final balancesAsync = ref.watch(financeBalancesProvider);
+    final fundTransactionsAsync = ref.watch(fundTransactionsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -44,9 +49,9 @@ class ExpensesScreen extends ConsumerWidget {
             ),
           ),
           SliverToBoxAdapter(
-            child: fundMovementsAsync.when(
-              data: (movements) {
-                if (movements.isEmpty) {
+            child: fundTransactionsAsync.when(
+              data: (transactions) {
+                if (transactions.isEmpty) {
                   return const Padding(
                     padding: EdgeInsets.all(16.0),
                     child: Center(child: Text('No fund additions recorded.')),
@@ -57,9 +62,9 @@ class ExpensesScreen extends ConsumerWidget {
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: movements.length,
+                    itemCount: transactions.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 12),
-                    itemBuilder: (context, index) => _FundMovementCard(movement: movements[index]),
+                    itemBuilder: (context, index) => _FundTransactionCard(transaction: transactions[index]),
                   ),
                 );
               },
@@ -244,7 +249,7 @@ class _ExpenseFilters extends ConsumerWidget {
 
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({required this.balancesAsync, required this.expensesAsync});
-  final AsyncValue<Map<String, dynamic>> balancesAsync;
+  final AsyncValue<FinanceBalance?> balancesAsync;
   final AsyncValue<List<Expense>> expensesAsync;
 
   @override
@@ -313,8 +318,8 @@ class _SummaryCard extends StatelessWidget {
           const SizedBox(height: 16),
           balancesAsync.maybeWhen(
             data: (balances) {
-              final cash = balances['cashBalancePaise'] ?? 0;
-              final bank = balances['bankBalancePaise'] ?? 0;
+              final cash = balances?.cash ?? 0;
+              final bank = balances?.bank ?? 0;
               return Row(
                 children: [
                   Expanded(
@@ -323,7 +328,7 @@ class _SummaryCard extends StatelessWidget {
                       amount: cash,
                       icon: Icons.payments_outlined,
                       color: Colors.green,
-                      onAdd: () => _showAddFundsDialog(context, 'cash'),
+                      onAdd: () => _showAddFundsDialog(context, FinanceAccount.cash),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -333,7 +338,7 @@ class _SummaryCard extends StatelessWidget {
                       amount: bank,
                       icon: Icons.account_balance_outlined,
                       color: Colors.blue,
-                      onAdd: () => _showAddFundsDialog(context, 'bank'),
+                      onAdd: () => _showAddFundsDialog(context, FinanceAccount.bank),
                     ),
                   ),
                 ],
@@ -346,11 +351,11 @@ class _SummaryCard extends StatelessWidget {
     );
   }
 
-  void _showAddFundsDialog(BuildContext context, String type) {
+  void _showAddFundsDialog(BuildContext context, FinanceAccount type) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _AddFundsSheet(initialType: type),
+      builder: (context) => _AddFundsSheet(initialAccount: type),
     );
   }
 }
@@ -470,52 +475,123 @@ class _StatusBadge extends StatelessWidget {
     );
   }
 }
-class _FundMovementCard extends StatelessWidget {
-  const _FundMovementCard({required this.movement});
-  final FundMovement movement;
+class _FundTransactionCard extends ConsumerWidget {
+  const _FundTransactionCard({required this.transaction});
+  final FinanceTransaction transaction;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final fmt = DateFormat('MMM dd');
-    final isCash = movement.type == 'cash';
+    final isCash = transaction.account == FinanceAccount.cash;
     final color = isCash ? Colors.green : Colors.blue;
 
     return Container(
       width: 180,
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: cs.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _showFundOptions(context, ref),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                'Rs. ${formatRupeesFromPaise(movement.amountPaise)}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Rs. ${formatRupeesFromPaise(transaction.amount)}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  Text(fmt.format(transaction.date), style: Theme.of(context).textTheme.bodySmall),
+                ],
               ),
-              Text(fmt.format(movement.timestamp), style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 4),
+              Text(
+                'to ${(transaction.account?.name ?? '').toUpperCase()}',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                transaction.notes.isNotEmpty ? transaction.notes : 'Fund Addition',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            'to ${movement.type.toUpperCase()}',
-            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            movement.reason,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  void _showFundOptions(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Edit fund addition'),
+              onTap: () {
+                Navigator.pop(context);
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (context) => _AddFundsSheet(transaction: transaction),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text('Delete fund addition', style: TextStyle(color: Colors.red)),
+              onTap: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                Navigator.pop(context);
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Delete Fund Addition?'),
+                    content: const Text('This will reverse the balance impact and mark the transaction as deleted.'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true), 
+                        child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirmed != true) return;
+
+                try {
+                  final repo = ref.read(financeRepositoryProvider);
+                  if (repo == null) throw StateError('Finance repository not available');
+                  final userId = ref.read(firebaseAuthProvider).currentUser?.uid ?? 'unknown';
+
+                  await repo.deleteTransaction(
+                    requestId: const Uuid().v4(),
+                    transactionId: transaction.id,
+                    userId: userId,
+                  );
+
+                  messenger.showSnackBar(const SnackBar(content: Text('Fund addition deleted')));
+                } catch (e) {
+                  messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -915,8 +991,9 @@ class _ExpenseFormSheetState extends ConsumerState<_ExpenseFormSheet> {
 }
 
 class _AddFundsSheet extends ConsumerStatefulWidget {
-  const _AddFundsSheet({required this.initialType});
-  final String initialType;
+  const _AddFundsSheet({this.initialAccount, this.transaction});
+  final FinanceAccount? initialAccount;
+  final FinanceTransaction? transaction;
 
   @override
   ConsumerState<_AddFundsSheet> createState() => _AddFundsSheetState();
@@ -926,20 +1003,22 @@ class _AddFundsSheetState extends ConsumerState<_AddFundsSheet> {
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
   
-  late String _type;
-  String? _selectedReason;
+  late FinanceAccount _account;
+  late DateTime _date;
   bool _busy = false;
-
-  final List<String> _reasons = [
-    'Opening balance', 'Owner contribution', 'Float cash', 
-    'Emergency deposit', 'Cash refill', 'Miscellaneous'
-  ];
 
   @override
   void initState() {
     super.initState();
-    _type = widget.initialType;
-    _selectedReason = _reasons.isNotEmpty ? _reasons[0] : '';
+    if (widget.transaction != null) {
+      _amountController.text = (widget.transaction!.amount / 100).toStringAsFixed(0);
+      _notesController.text = widget.transaction!.notes;
+      _account = widget.transaction!.account ?? FinanceAccount.cash;
+      _date = widget.transaction!.date;
+    } else {
+      _account = widget.initialAccount ?? FinanceAccount.cash;
+      _date = DateTime.now();
+    }
   }
 
   @override
@@ -949,47 +1028,77 @@ class _AddFundsSheetState extends ConsumerState<_AddFundsSheet> {
     super.dispose();
   }
 
+  Future<void> _selectDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) {
+      setState(() => _date = picked);
+    }
+  }
+
   Future<void> _submit() async {
     final amountText = _amountController.text.trim();
     if (amountText.isEmpty) return;
     final amount = (double.tryParse(amountText) ?? 0) * 100;
     if (amount <= 0) return;
-    final reason = _selectedReason;
-    if (reason == null) return;
 
     setState(() => _busy = true);
     try {
+      final businessId = ref.read(userBusinessIdProvider);
+      if (businessId == null) throw StateError('Business ID not found');
+      
       final user = ref.read(firebaseAuthProvider).currentUser;
-      final deviceName = ref.read(deviceNameProvider) ?? 'Unknown device';
-      final repo = ref.read(fundRepositoryProvider);
-      if (repo == null) throw StateError('Fund repository not available');
+      final userId = user?.uid ?? 'unknown';
+      final repo = ref.read(financeRepositoryProvider);
+      if (repo == null) throw StateError('Finance repository not available');
 
-      final movement = FundMovement(
-        id: '',
-        type: _type,
-        amountPaise: amount.round(),
-        reason: reason,
+      final isEdit = widget.transaction != null;
+      final txId = isEdit ? widget.transaction!.id : const Uuid().v4();
+      
+      final tx = FinanceTransaction(
+        id: txId,
+        businessId: businessId,
+        type: FinanceTransactionType.fund,
+        amount: amount.round(),
+        account: _account,
         notes: _notesController.text.trim(),
-        createdBy: deviceName,
-        createdByUid: user?.uid ?? '',
-        timestamp: DateTime.now(),
-        timestampMs: DateTime.now().millisecondsSinceEpoch,
-        deviceName: deviceName,
+        date: _date,
+        month: _date.month,
+        year: _date.year,
+        createdBy: widget.transaction?.createdBy ?? userId,
+        createdAt: widget.transaction?.createdAt ?? DateTime.now(),
+        updatedBy: isEdit ? userId : null,
+        updatedAt: isEdit ? DateTime.now() : null,
       );
 
-      await repo.addFunds(
-        movement,
-      );
+      if (isEdit) {
+        await repo.editTransaction(
+          requestId: const Uuid().v4(),
+          transactionId: txId,
+          newTx: tx,
+          userId: userId,
+        );
+      } else {
+        await repo.createTransaction(
+          requestId: const Uuid().v4(),
+          tx: tx,
+          userId: userId,
+        );
+      }
 
       unawaited(
         ref.read(logActivityUseCaseProvider).execute(
-          action: ActivityAction.fundAdded,
+          action: isEdit ? ActivityAction.fundModified : ActivityAction.fundAdded,
           category: ActivityCategory.financial,
           targetType: 'fund',
-          targetName: movement.reason,
+          targetName: tx.notes.isNotEmpty ? tx.notes : 'Fund Addition',
           metadata: {
-            'amount': movement.amountPaise / 100,
-            'type': movement.type,
+            'amount': tx.amount / 100,
+            'type': tx.account?.name,
           },
         ),
       );
@@ -1013,12 +1122,15 @@ class _AddFundsSheetState extends ConsumerState<_AddFundsSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Add funds', style: Theme.of(context).textTheme.headlineSmall),
+            Text(
+              widget.transaction == null ? 'Add funds' : 'Edit fund addition', 
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
             const SizedBox(height: 24),
             TextField(
               controller: _amountController,
               keyboardType: TextInputType.number,
-              autofocus: true,
+              autofocus: widget.transaction == null,
               decoration: const InputDecoration(
                 labelText: 'Amount (Rs.)',
                 border: OutlineInputBorder(),
@@ -1026,24 +1138,21 @@ class _AddFundsSheetState extends ConsumerState<_AddFundsSheet> {
               ),
             ),
             const SizedBox(height: 16),
-            SegmentedButton<String>(
+            SegmentedButton<FinanceAccount>(
               segments: const [
-                ButtonSegment(value: 'cash', label: Text('Cash'), icon: Icon(Icons.payments_outlined)),
-                ButtonSegment(value: 'bank', label: Text('Bank'), icon: Icon(Icons.account_balance_outlined)),
+                ButtonSegment(value: FinanceAccount.cash, label: Text('Cash'), icon: Icon(Icons.payments_outlined)),
+                ButtonSegment(value: FinanceAccount.bank, label: Text('Bank'), icon: Icon(Icons.account_balance_outlined)),
               ],
-              selected: {_type},
-              onSelectionChanged: (set) => setState(() => _type = set.first),
+              selected: {_account},
+              onSelectionChanged: (set) => setState(() => _account = set.first),
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              isExpanded: true,
-              value: _selectedReason,
-              decoration: const InputDecoration(labelText: 'Reason', border: OutlineInputBorder()),
-              items: _reasons.map((r) => DropdownMenuItem(
-                value: r, 
-                child: Text(r, overflow: TextOverflow.ellipsis),
-              )).toList(),
-              onChanged: (v) => setState(() => _selectedReason = v),
+            ListTile(
+              title: const Text('Date'),
+              subtitle: Text(DateFormat('yyyy-MM-dd').format(_date)),
+              trailing: const Icon(Icons.calendar_today),
+              onTap: _selectDate,
+              contentPadding: EdgeInsets.zero,
             ),
             const SizedBox(height: 16),
             TextField(
@@ -1056,7 +1165,7 @@ class _AddFundsSheetState extends ConsumerState<_AddFundsSheet> {
               style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(60)),
               child: _busy 
                   ? const CircularProgressIndicator(color: Colors.white) 
-                  : const Text('Save funds'),
+                  : Text(widget.transaction == null ? 'Save funds' : 'Update funds'),
             ),
           ],
         ),

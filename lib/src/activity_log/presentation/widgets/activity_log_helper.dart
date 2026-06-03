@@ -59,12 +59,6 @@ extension ActivityLogEntryX on ActivityLogEntry {
         return 'Invoice paid: $targetName';
       case ActivityAction.invoiceVoided:
         return 'Voided invoice: $targetName';
-      case ActivityAction.balanceUpdated:
-        return 'Updated balance';
-      case ActivityAction.fundAdded:
-        return 'Added funds: Rs. ${metadata['amount']}';
-      case ActivityAction.paymentRecorded:
-        return 'Recorded payment: Rs. ${metadata['amount']}';
       case ActivityAction.businessOpened:
         return 'Business opened';
       case ActivityAction.businessClosed:
@@ -82,6 +76,22 @@ extension ActivityLogEntryX on ActivityLogEntry {
           return 'Inventory restored from cancelled order';
         }
         return 'Updated $targetName stock from ${metadata['previousStock']} → ${metadata['newStock']}';
+      case ActivityAction.balanceUpdated:
+        return 'Updated balance';
+      case ActivityAction.fundAdded:
+        return 'Added funds: Rs. ${metadata['amount']}';
+      case ActivityAction.fundModified:
+        return 'Modified fund addition: $targetName';
+      case ActivityAction.fundDeleted:
+        return 'Deleted fund addition: $targetName';
+      case ActivityAction.transferCreated:
+        return 'Created transfer: Rs. ${metadata['amount']}';
+      case ActivityAction.transferModified:
+        return 'Modified transfer: $targetId';
+      case ActivityAction.transferDeleted:
+        return 'Deleted transfer: $targetId';
+      case ActivityAction.paymentRecorded:
+        return 'Recorded payment: Rs. ${metadata['amount']}';
     }
   }
 
