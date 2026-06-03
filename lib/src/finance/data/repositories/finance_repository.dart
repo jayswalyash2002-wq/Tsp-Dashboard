@@ -28,6 +28,19 @@ class FinanceRepository {
   DocumentReference<Map<String, dynamic>> get _balancesRef => _db.collection('balances').doc(_businessId);
   CollectionReference<Map<String, dynamic>> get _auditLogRef => _db.collection('audit_log');
   CollectionReference<Map<String, dynamic>> get _pendingOpsRef => _db.collection('pending_operations');
+  CollectionReference<Map<String, dynamic>> get _closingsRef => _db.collection('monthly_closings');
+
+  /// Check if a month is locked
+  Future<bool> isMonthLocked(int month, int year) async {
+    final snap = await _closingsRef
+        .where('businessId', isEqualTo: _businessId)
+        .where('month', isEqualTo: month)
+        .where('year', isEqualTo: year)
+        .where('isLocked', isEqualTo: true)
+        .limit(1)
+        .get();
+    return snap.docs.isNotEmpty;
+  }
 
   /// Core logic: Reverse the impact of a transaction on balances
   FinanceBalance reverseImpact(FinanceTransaction tx, FinanceBalance balances) {
@@ -38,6 +51,7 @@ class FinanceRepository {
 
     switch (tx.type) {
       case FinanceTransactionType.expense:
+      case FinanceTransactionType.closing_adjustment:
         if (tx.account == FinanceAccount.cash) {
           cash += tx.amount;
         } else {
@@ -45,6 +59,7 @@ class FinanceRepository {
         }
         break;
       case FinanceTransactionType.fund:
+      case FinanceTransactionType.opening_balance:
         if (tx.account == FinanceAccount.cash) {
           cash -= tx.amount;
         } else {
@@ -72,6 +87,7 @@ class FinanceRepository {
 
     switch (tx.type) {
       case FinanceTransactionType.expense:
+      case FinanceTransactionType.closing_adjustment:
         if (tx.account == FinanceAccount.cash) {
           cash -= tx.amount;
         } else {
@@ -79,6 +95,7 @@ class FinanceRepository {
         }
         break;
       case FinanceTransactionType.fund:
+      case FinanceTransactionType.opening_balance:
         if (tx.account == FinanceAccount.cash) {
           cash += tx.amount;
         } else {
@@ -144,6 +161,11 @@ class FinanceRepository {
     required FinanceTransaction tx,
     required String userId,
   }) async {
+    // Check if month is locked
+    if (await isMonthLocked(tx.month, tx.year)) {
+      throw Exception('Cannot create transaction in a locked month (${tx.month}/${tx.year})');
+    }
+
     return await executeWithIdempotency(
       requestId: requestId,
       operation: (transaction) async {
@@ -196,6 +218,11 @@ class FinanceRepository {
     required FinanceTransaction newTx,
     required String userId,
   }) async {
+    // Check if month is locked
+    if (await isMonthLocked(newTx.month, newTx.year)) {
+      throw Exception('Cannot edit transaction in a locked month (${newTx.month}/${newTx.year})');
+    }
+
     return await executeWithIdempotency(
       requestId: requestId,
       operation: (transaction) async {
@@ -262,6 +289,11 @@ class FinanceRepository {
         
         final oldTx = FinanceTransaction.fromMap(oldTxSnap.data()!, oldTxSnap.id);
         if (oldTx.isDeleted) throw Exception('Transaction already deleted');
+
+        // Check if month is locked
+        if (await isMonthLocked(oldTx.month, oldTx.year)) {
+          throw Exception('Cannot delete transaction in a locked month (${oldTx.month}/${oldTx.year})');
+        }
 
         // 1. Read current balances
         final balanceSnap = await transaction.get(_balancesRef);
@@ -368,6 +400,7 @@ class FinanceRepository {
       
       switch (tx.type) {
         case FinanceTransactionType.expense:
+        case FinanceTransactionType.closing_adjustment:
           if (tx.account == FinanceAccount.cash) {
             cash -= tx.amount;
           } else {
@@ -375,6 +408,7 @@ class FinanceRepository {
           }
           break;
         case FinanceTransactionType.fund:
+        case FinanceTransactionType.opening_balance:
           if (tx.account == FinanceAccount.cash) {
             cash += tx.amount;
           } else {

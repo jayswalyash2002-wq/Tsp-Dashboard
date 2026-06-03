@@ -1,7 +1,9 @@
 enum FinanceTransactionType {
   fund,
   expense,
-  transfer;
+  transfer,
+  opening_balance,
+  closing_adjustment;
 
   static FinanceTransactionType fromString(String? val) {
     return FinanceTransactionType.values.firstWhere(
@@ -26,7 +28,9 @@ enum FinanceAccount {
 enum FinanceAuditAction {
   created,
   edited,
-  deleted;
+  deleted,
+  month_locked,
+  month_unlocked;
 
   static FinanceAuditAction fromString(String? val) {
     return FinanceAuditAction.values.firstWhere(

@@ -24,6 +24,17 @@ class ExpenseRepository {
   final LocalDatabaseService _localDb;
   final String _businessId;
 
+  Future<bool> _isMonthLocked(DateTime date) async {
+    final snap = await _db.collection('monthly_closings')
+        .where('businessId', isEqualTo: _businessId)
+        .where('month', isEqualTo: date.month)
+        .where('year', isEqualTo: date.year)
+        .where('isLocked', isEqualTo: true)
+        .limit(1)
+        .get();
+    return snap.docs.isNotEmpty;
+  }
+
   Stream<List<Expense>> watchExpenses() {
     if (kDebugMode) {
       debugPrint('EXPENSE_REPO: Watching expenses for businessId: $_businessId');
@@ -87,6 +98,10 @@ class ExpenseRepository {
     final uid = _auth.currentUser?.uid;
 
     try {
+      if (await _isMonthLocked(expense.timestamp)) {
+        throw Exception('Cannot sync expense in a locked month');
+      }
+
       await _db.runTransaction((tx) async {
         // 1. READS
         final balancesSnap = await tx.get(balancesRef);
@@ -179,6 +194,10 @@ class ExpenseRepository {
 
     if (kDebugMode) {
       debugPrint('EXPENSE_REPO: Deleting expense ${expense.id} for businessId: $_businessId');
+    }
+
+    if (await _isMonthLocked(expense.timestamp)) {
+      throw Exception('Cannot delete expense in a locked month');
     }
 
     await _db.runTransaction((tx) async {

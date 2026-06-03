@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../auth/data/auth_providers.dart';
 import '../../core/firebase/firebase_providers.dart';
@@ -27,7 +28,6 @@ class ExpensesScreen extends ConsumerWidget {
     final expensesAsync = ref.watch(expensesProvider);
     final filteredExpensesAsync = ref.watch(filteredExpensesProvider);
     final balancesAsync = ref.watch(financeBalancesProvider);
-    final fundTransactionsAsync = ref.watch(fundTransactionsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -42,35 +42,8 @@ class ExpensesScreen extends ConsumerWidget {
           SliverToBoxAdapter(
             child: _SummaryCard(balancesAsync: balancesAsync, expensesAsync: expensesAsync),
           ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-            sliver: SliverToBoxAdapter(
-              child: Text('Recent fund additions', style: Theme.of(context).textTheme.titleMedium),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: fundTransactionsAsync.when(
-              data: (transactions) {
-                if (transactions.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Center(child: Text('No fund additions recorded.')),
-                  );
-                }
-                return SizedBox(
-                  height: 120,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: transactions.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
-                    itemBuilder: (context, index) => _FundTransactionCard(transaction: transactions[index]),
-                  ),
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e')),
-            ),
+          const SliverToBoxAdapter(
+            child: _MonthClosingBanner(),
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
@@ -247,6 +220,78 @@ class _ExpenseFilters extends ConsumerWidget {
   }
 }
 
+class _MonthClosingBanner extends ConsumerWidget {
+  const _MonthClosingBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final closableMonthAsync = ref.watch(closableMonthProvider);
+
+    return closableMonthAsync.when(
+      data: (closableMonth) {
+        if (closableMonth == null) return const SizedBox.shrink();
+        
+        final monthName = DateFormat('MMMM yyyy').format(closableMonth);
+        final cs = Theme.of(context).colorScheme;
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: cs.primary.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.account_balance_wallet_outlined,
+                  size: 20,
+                  color: cs.primary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$monthName Closing Pending',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: cs.onPrimaryContainer,
+                            ),
+                      ),
+                      Text(
+                        'Review finances and close the month.',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: cs.onPrimaryContainer.withValues(alpha: 0.7),
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => context.push('/month-closing'),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  child: const Text('Review'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+}
+
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({required this.balancesAsync, required this.expensesAsync});
   final AsyncValue<FinanceBalance?> balancesAsync;
@@ -267,55 +312,6 @@ class _SummaryCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          expensesAsync.maybeWhen(
-            data: (expenses) {
-              final total = expenses.fold(0, (sum, e) => sum + e.amountPaise);
-              final unsettled = expenses
-                  .where((e) => e.expenseStatus == 'unsettled')
-                  .fold(0, (sum, e) => sum + e.amountPaise);
-              final settled = expenses
-                  .where((e) => e.expenseStatus == 'settled')
-                  .fold(0, (sum, e) => sum + e.amountPaise);
-
-              return Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _SummaryItem(
-                          label: 'Total Expenses',
-                          amount: total,
-                          color: cs.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _SummaryItem(
-                          label: 'Unsettled',
-                          amount: unsettled,
-                          color: Colors.orange,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _SummaryItem(
-                          label: 'Settled',
-                          amount: settled,
-                          color: Colors.green,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
-            orElse: () => const SizedBox.shrink(),
-          ),
-          const SizedBox(height: 16),
           balancesAsync.maybeWhen(
             data: (balances) {
               final cash = balances?.cash ?? 0;
@@ -345,6 +341,52 @@ class _SummaryCard extends StatelessWidget {
               );
             },
             orElse: () => const CircularProgressIndicator(),
+          ),
+          const SizedBox(height: 16),
+          expensesAsync.maybeWhen(
+            data: (expenses) {
+              final total = expenses.fold(0, (sum, e) => sum + e.amountPaise);
+              final unsettled = expenses
+                  .where((e) => e.expenseStatus == 'unsettled')
+                  .fold(0, (sum, e) => sum + e.amountPaise);
+              final settled = expenses
+                  .where((e) => e.expenseStatus == 'settled')
+                  .fold(0, (sum, e) => sum + e.amountPaise);
+
+              return Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _SummaryItem(
+                          label: 'Total Expenses',
+                          amount: total,
+                          color: cs.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _CompactSummaryItem(
+                        label: 'Unsettled',
+                        amount: unsettled,
+                        color: Colors.orange,
+                      ),
+                      const SizedBox(width: 24),
+                      _CompactSummaryItem(
+                        label: 'Settled',
+                        amount: settled,
+                        color: Colors.green,
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+            orElse: () => const SizedBox.shrink(),
           ),
         ],
       ),
@@ -389,6 +431,47 @@ class _SummaryItem extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CompactSummaryItem extends StatelessWidget {
+  const _CompactSummaryItem({
+    required this.label,
+    required this.amount,
+    required this.color,
+  });
+  final String label;
+  final int amount;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '$label: ',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+        Text(
+          'Rs. ${formatRupeesFromPaise(amount)}',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+        ),
+      ],
     );
   }
 }
@@ -475,128 +558,6 @@ class _StatusBadge extends StatelessWidget {
     );
   }
 }
-class _FundTransactionCard extends ConsumerWidget {
-  const _FundTransactionCard({required this.transaction});
-  final FinanceTransaction transaction;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final cs = Theme.of(context).colorScheme;
-    final fmt = DateFormat('MMM dd');
-    final isCash = transaction.account == FinanceAccount.cash;
-    final color = isCash ? Colors.green : Colors.blue;
-
-    return Container(
-      width: 180,
-      decoration: BoxDecoration(
-        color: cs.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => _showFundOptions(context, ref),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Rs. ${formatRupeesFromPaise(transaction.amount)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  Text(fmt.format(transaction.date), style: Theme.of(context).textTheme.bodySmall),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'to ${(transaction.account?.name ?? '').toUpperCase()}',
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                transaction.notes.isNotEmpty ? transaction.notes : 'Fund Addition',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showFundOptions(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text('Edit fund addition'),
-              onTap: () {
-                Navigator.pop(context);
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (context) => _AddFundsSheet(transaction: transaction),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: const Text('Delete fund addition', style: TextStyle(color: Colors.red)),
-              onTap: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                Navigator.pop(context);
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Delete Fund Addition?'),
-                    content: const Text('This will reverse the balance impact and mark the transaction as deleted.'),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true), 
-                        child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
-                );
-
-                if (confirmed != true) return;
-
-                try {
-                  final repo = ref.read(financeRepositoryProvider);
-                  if (repo == null) throw StateError('Finance repository not available');
-                  final userId = ref.read(firebaseAuthProvider).currentUser?.uid ?? 'unknown';
-
-                  await repo.deleteTransaction(
-                    requestId: const Uuid().v4(),
-                    transactionId: transaction.id,
-                    userId: userId,
-                  );
-
-                  messenger.showSnackBar(const SnackBar(content: Text('Fund addition deleted')));
-                } catch (e) {
-                  messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _ExpenseTile extends ConsumerWidget {
   const _ExpenseTile({required this.expense});
   final Expense expense;

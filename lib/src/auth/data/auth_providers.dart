@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/device/device_providers.dart';
 import '../../core/firebase/firebase_providers.dart';
 import '../../core/storage/prefs.dart';
+import '../../core/rbac/role.dart';
 import '../domain/app_user.dart';
 import 'auth_repository.dart';
 import 'staff_repository.dart';
@@ -138,4 +139,8 @@ final userProfileProvider = StreamProvider<AppUser?>((ref) {
       return data != null ? AppUser.fromMap(data) : null;
     });
   }
+});
+
+final userRoleProvider = Provider<AsyncValue<RoleType?>>((ref) {
+  return ref.watch(userProfileProvider).whenData((user) => user?.roleType);
 });

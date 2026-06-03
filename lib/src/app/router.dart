@@ -20,6 +20,8 @@ import 'package:tsp_dashboard/src/profile/presentation/settings_screen.dart';
 import 'package:tsp_dashboard/src/reports/presentation/expense_reports_screen.dart';
 import 'package:tsp_dashboard/src/reports/presentation/sales_reports_screen.dart';
 import 'package:tsp_dashboard/src/business/presentation/business_setup_screen.dart';
+import 'package:tsp_dashboard/src/business/presentation/business_settings_screen.dart';
+import 'package:tsp_dashboard/src/finance/presentation/screens/month_closing_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/staff_management_screen.dart';
 import 'package:tsp_dashboard/src/inventory/presentation/inventory_screen.dart';
 import 'package:tsp_dashboard/src/features/staff/presentation/add_staff_screen.dart';
@@ -207,6 +209,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/settings',
             builder: (context, state) => const SettingsScreen(),
+          ),
+          GoRoute(
+            path: '/business-settings',
+            builder: (context, state) => const BusinessSettingsScreen(),
+          ),
+          GoRoute(
+            path: '/month-closing',
+            builder: (context, state) => const MonthClosingScreen(),
           ),
           StatefulShellRoute.indexedStack(
             builder: (context, state, navigationShell) {

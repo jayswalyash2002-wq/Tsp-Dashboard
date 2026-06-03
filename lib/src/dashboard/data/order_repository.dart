@@ -37,6 +37,17 @@ class OrderRepository {
   final LocalDatabaseService _localDb;
   final String _businessId;
 
+  Future<bool> _isMonthLocked(DateTime date) async {
+    final snap = await _db.collection('monthly_closings')
+        .where('businessId', isEqualTo: _businessId)
+        .where('month', isEqualTo: date.month)
+        .where('year', isEqualTo: date.year)
+        .where('isLocked', isEqualTo: true)
+        .limit(1)
+        .get();
+    return snap.docs.isNotEmpty;
+  }
+
   Stream<List<SavedOrder>> watchOrders() {
     if (kDebugMode) {
       debugPrint('ORDER_REPO: Watching orders for businessId: $_businessId');
@@ -113,6 +124,10 @@ class OrderRepository {
     final balancesRef = _db.collection('balances').doc(_businessId);
     
     try {
+      if (await _isMonthLocked(order.timestamp)) {
+        throw Exception('Cannot sync order in a locked month');
+      }
+
       await _db.runTransaction((tx) async {
         // 1. READ PHASE
         final balancesSnap = await tx.get(balancesRef);
@@ -186,6 +201,10 @@ class OrderRepository {
 
     if (kDebugMode) {
       debugPrint('ORDER_REPO: Updating order ${oldOrder.id} for businessId: $_businessId');
+    }
+
+    if (await _isMonthLocked(oldOrder.timestamp)) {
+      throw Exception('Cannot update order in a locked month');
     }
 
     await _db.runTransaction((tx) async {
@@ -383,6 +402,9 @@ class OrderRepository {
   }) async {
     final orderRef = _db.collection('orders').doc(orderId);
 
+    // Initial check (non-transactional to avoid blocking if possible, but transaction will re-verify implicitly if needed)
+    // Actually we need the timestamp from the document.
+    
     await _db.runTransaction((tx) async {
       // 1. READ current order document
       final snap = await tx.get(orderRef);
@@ -391,6 +413,11 @@ class OrderRepository {
       }
 
       final orderData = snap.data()!;
+      final timestamp = (orderData['timestamp'] as Timestamp).toDate();
+      if (await _isMonthLocked(timestamp)) {
+        throw Exception('Cannot cancel order in a locked month');
+      }
+
       final existingBusinessId = orderData['businessId']?.toString();
 
       // Verify business ownership (Allow null/empty for legacy order healing)

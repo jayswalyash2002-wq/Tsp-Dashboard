@@ -15,9 +15,6 @@ import '../../core/rbac/permission.dart';
 import '../../core/rbac/permission_gate.dart';
 import '../../activity_log/presentation/providers/activity_log_providers.dart';
 import '../../activity_log/domain/entities/activity_log_enums.dart';
-import '../../activity_log/presentation/utils/activity_log_export_service.dart';
-import '../../expenses/data/expense_providers.dart';
-import '../../inventory/data/inventory_providers.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -80,6 +77,12 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             const _BusinessStatusCard(),
             const SizedBox(height: 24),
+            _Tile(
+              title: 'Business Settings',
+              subtitle: 'Business info, Staff, Inventory, Month Closing',
+              onTap: () => context.push('/business-settings'),
+            ),
+            const SizedBox(height: 10),
             PermissionGate(
               permission: Permission.manageMenu,
               child: Column(
@@ -88,29 +91,6 @@ class ProfileScreen extends ConsumerWidget {
                     title: 'Edit menu',
                     subtitle: 'Add, edit, disable items',
                     onTap: () => context.push('/edit-menu'),
-                  ),
-                  const SizedBox(height: 10),
-                ],
-              ),
-            ),
-            PermissionGate(
-              permission: Permission.manageInventory,
-              child: Column(
-                children: [
-                  Consumer(
-                    builder: (context, ref, child) {
-                      final hasLowStock = ref.watch(hasLowStockProvider);
-                      return _Tile(
-                        title: 'Inventory',
-                        subtitle: 'Manage stock, units and low stock alerts',
-                        onTap: () => context.push('/inventory'),
-                        trailing: hasLowStock
-                            ? const Badge(
-                                backgroundColor: Colors.red,
-                              )
-                            : null,
-                      );
-                    },
                   ),
                   const SizedBox(height: 10),
                 ],
@@ -135,35 +115,9 @@ class ProfileScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            PermissionGate(
-              permission: Permission.manageStaff,
-              child: Column(
-                children: [
-                  _Tile(
-                    title: 'Manage Staff',
-                    subtitle: 'Roles, access, and team members',
-                    onTap: () => context.push('/staff'),
-                  ),
-                  const SizedBox(height: 10),
-                ],
-              ),
-            ),
-            PermissionGate(
-              permission: Permission.viewActivityLog,
-              child: Column(
-                children: [
-                  _Tile(
-                    title: 'Activity log',
-                    subtitle: 'Audit trail of all business actions',
-                    onTap: () => context.push('/activity-log'),
-                  ),
-                  const SizedBox(height: 10),
-                ],
-              ),
-            ),
             _Tile(
-              title: 'Settings',
-              subtitle: 'Device: ${deviceName ?? "Not set"}',
+              title: 'App Settings',
+              subtitle: 'Device: ${deviceName ?? "Not set"}, Theme, Appearance',
               onTap: () => context.push('/settings'),
             ),
             const SizedBox(height: 10),
@@ -488,13 +442,11 @@ class _Tile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.trailing,
   });
 
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -522,10 +474,6 @@ class _Tile extends StatelessWidget {
                   ],
                 ),
               ),
-              if (trailing != null) ...[
-                trailing!,
-                const SizedBox(width: 8),
-              ],
               Icon(Icons.chevron_right,
                   color: cs.onSurface.withValues(alpha: 0.7)),
             ],

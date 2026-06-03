@@ -1,0 +1,58 @@
+// Firestore Security Rules for Finance V2 (Monthly Closing)
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Check if user has specific role in a business
+    function hasRole(businessId, roles) {
+      return get(/databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid)).data.role in roles;
+    }
+
+    // Helper: Check if month is locked
+    function isMonthLocked(businessId, month, year) {
+      let closingId = businessId + "_" + string(year) + "_" + string(month);
+      return exists(/databases/$(database)/documents/monthly_closings/$(closingId)) &&
+             get(/databases/$(database)/documents/monthly_closings/$(closingId)).data.isLocked == true;
+    }
+
+    // Transactions
+    match /transactions/{txId} {
+      allow read: if request.auth != null && hasRole(resource.data.businessId, ['owner', 'manager', 'staff']);
+
+      allow create: if request.auth != null &&
+                    hasRole(request.resource.data.businessId, ['owner', 'manager']) &&
+                    !isMonthLocked(request.resource.data.businessId, request.resource.data.month, request.resource.data.year);
+
+      allow update: if request.auth != null &&
+                    hasRole(resource.data.businessId, ['owner', 'manager']) &&
+                    !isMonthLocked(resource.data.businessId, resource.data.month, resource.data.year) &&
+                    !isMonthLocked(request.resource.data.businessId, request.resource.data.month, request.resource.data.year);
+
+      allow delete: if false; // Soft-delete only via 'isDeleted' flag
+    }
+
+    // Monthly Closings
+    match /monthly_closings/{closingId} {
+      allow read: if request.auth != null && hasRole(resource.data.businessId, ['owner', 'manager', 'staff']);
+
+      allow create: if request.auth != null && hasRole(request.resource.data.businessId, ['owner', 'manager']);
+
+      allow update: if request.auth != null && hasRole(resource.data.businessId, ['owner']) &&
+                    (request.resource.data.isLocked == false || resource.data.isLocked == false);
+    }
+
+    // Balances
+    match /balances/{businessId} {
+      allow read: if request.auth != null && hasRole(businessId, ['owner', 'manager', 'staff']);
+      allow write: if request.auth != null && hasRole(businessId, ['owner', 'manager']);
+    }
+
+    // Audit Log
+    match /audit_log/{logId} {
+      allow read: if request.auth != null && hasRole(resource.data.businessId, ['owner', 'manager']);
+      allow create: if request.auth != null; // Created via backend or repo logic
+      allow update, delete: if false; // Immutable
+    }
+  }
+}
