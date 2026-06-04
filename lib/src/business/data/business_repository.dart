@@ -113,16 +113,40 @@ class BusinessRepository {
     final batch = _db.batch();
     
     if (kDebugMode) {
-      debugPrint('BUSINESS_REPO: Creating business $businessId and FIRST owner membership for $uid');
+      debugPrint('BUSINESS_REPO: Committing batch for Business ID: $businessId');
     }
     
     // Operation 1: Create business document
-    batch.set(businessRef, {
-      ...finalBusiness.toMap(),
+    // We construct the map explicitly to ensure all required fields for security rules are present
+    final businessMap = {
+      'businessId': businessId,
+      'uin': uin,
+      'businessName': business.businessName,
+      'ownerName': business.ownerName,
+      'officialEmail': business.officialEmail,
+      'phoneNumber': business.phoneNumber,
+      'secondaryPhoneNumber': business.secondaryPhoneNumber,
+      'businessType': business.businessType,
+      'city': business.city,
+      'area': business.area,
+      'address': business.address,
+      'gstNumber': business.gstNumber,
+      'fssaiNumber': business.fssaiNumber,
+      'logoUrl': business.logoUrl,
+      'description': business.description,
       'createdAt': FieldValue.serverTimestamp(),
       'createdBy': uid,
       'status': 'active',
-    });
+      'businessStatus': 'open',
+      'autoOpenEnabled': false,
+      'autoCloseEnabled': false,
+      'openingTime': '09:00',
+      'closingTime': '22:00',
+      'manualOverride': false,
+      'timezone': 'Asia/Kolkata',
+    };
+
+    batch.set(businessRef, businessMap);
     
     // Operation 2: Create FIRST owner membership (New structure)
     final memberRef = _db
@@ -155,11 +179,12 @@ class BusinessRepository {
     });
 
     // Operation 2.2: Update user profile with active business and role
+    // Using set(merge: true) instead of update() to prevent failure if user doc is missing
     final userRef = _db.collection('users').doc(uid);
-    batch.update(userRef, {
+    batch.set(userRef, {
       'businessId': businessId,
       'role': 'OWNER',
-    });
+    }, SetOptions(merge: true));
 
     // Operation 3: Create business settings
     batch.set(settingsRef, {

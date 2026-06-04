@@ -8,7 +8,6 @@ import 'package:tsp_dashboard/src/auth/presentation/login_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/otp_verification_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/sign_up_screen.dart';
 import 'package:tsp_dashboard/src/auth/presentation/forgot_password_screen.dart';
-import 'package:tsp_dashboard/src/auth/presentation/intent_selection_screen.dart';
 import 'package:tsp_dashboard/src/core/firebase/firebase_providers.dart';
 import 'package:tsp_dashboard/src/memberships/presentation/join_business_screen.dart';
 import 'package:tsp_dashboard/src/dashboard/presentation/dashboard_screen.dart';
@@ -32,13 +31,17 @@ import 'package:tsp_dashboard/src/activity_log/presentation/screens/activity_log
 import 'package:tsp_dashboard/src/analytics/presentation/analytics_screen.dart';
 import 'package:tsp_dashboard/src/app/shell_scaffold.dart';
 import 'package:tsp_dashboard/src/features/public_menu/presentation/public_menu_screen.dart';
-import 'package:tsp_dashboard/src/constants/roles.dart'; // Added for extra param casting
+import 'package:tsp_dashboard/src/constants/roles.dart'; 
 
 import 'package:tsp_dashboard/src/core/rbac/permission.dart';
 import 'package:tsp_dashboard/src/core/rbac/permission_manager.dart';
+import 'package:tsp_dashboard/src/memberships/data/membership_providers.dart';
+import 'package:tsp_dashboard/src/memberships/domain/membership.dart';
 
 final goRouterProvider = Provider<GoRouter>((ref) {
   final permissionManager = ref.watch(permissionManagerProvider);
+  // Watch membership state to trigger router refresh when memberships are loaded/changed
+  final membershipsAsync = ref.watch(userMembershipsProvider);
 
   return GoRouter(
     initialLocation: '/dashboard',
@@ -49,20 +52,29 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       final user = authState.value;
       
       final isAuthPath = path.startsWith('/auth');
-      final isBusinessSetup = path.startsWith('/business-setup');
       final isPublicMenu = path.startsWith('/menu');
-      final isOnboarding = path == '/onboarding' || path == '/';
+      final isBusinessSetup = path.startsWith('/business-setup');
 
-      // 1. Unauthenticated users should be on /auth, /business-setup, /menu, or /onboarding (root)
-      if (user == null && !isAuthPath && !isBusinessSetup && !isOnboarding && !isPublicMenu) {
-        return '/onboarding';
+      // 1. Unauthenticated users
+      if (user == null && !isAuthPath && !isPublicMenu) {
+        return '/auth/login';
       }
 
-      // 2. Authenticated users should not be on Login pages if they have a session
-      // We allow /auth/signup and /onboarding to persist because they handle 
-      // the "authenticated but no business" state via AuthGate.
-      if (user != null && path == '/auth/login') {
-        return '/dashboard';
+      // 2. Authenticated users
+      if (user != null) {
+        final hasActiveMembership = membershipsAsync.hasValue && 
+            membershipsAsync.value!.any((m) => m.status == MembershipStatus.accepted);
+
+        // If on auth path (except OTP), decide where to go based on memberships
+        if (isAuthPath && path != '/auth/otp') {
+          return hasActiveMembership ? '/dashboard' : '/business-setup';
+        }
+
+        // If NO active membership, redirect to Business Setup (unless already there or on auth/public path)
+        if (!hasActiveMembership && !isBusinessSetup && !isAuthPath && !isPublicMenu) {
+          debugPrint('ROUTER_V2: No active membership, redirecting to Business Setup');
+          return '/business-setup';
+        }
       }
 
       // 3. Centralized Route-Permission mapping
@@ -70,7 +82,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         '/sales-reports': Permission.viewReports,
         '/expense-reports': Permission.viewReports,
         '/edit-menu': Permission.manageMenu,
-        '/business-setup': Permission.manageBusiness,
         '/expenses': Permission.manageExpenses,
         '/staff': Permission.manageStaff,
         '/activity-log': Permission.viewActivityLog,
@@ -83,6 +94,17 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           if (!permissionManager.hasPermission(entry.value)) {
             return '/dashboard'; // Safe fallback
           }
+        }
+      }
+
+      // Special case for /business-setup: 
+      // Allow if NO membership (creation mode) OR if HAS membership + Permission (edit mode)
+      if (isBusinessSetup) {
+        final hasActiveMembership = membershipsAsync.hasValue && 
+            membershipsAsync.value!.any((m) => m.status == MembershipStatus.accepted);
+        
+        if (hasActiveMembership && !permissionManager.hasPermission(Permission.manageBusiness)) {
+          return '/dashboard';
         }
       }
 
@@ -193,10 +215,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
               final businessId = state.uri.queryParameters['id'];
               return BusinessSetupScreen(businessId: businessId);
             },
-          ),
-          GoRoute(
-            path: '/onboarding',
-            builder: (context, state) => const IntentSelectionScreen(),
           ),
           GoRoute(
             path: '/activity-log',

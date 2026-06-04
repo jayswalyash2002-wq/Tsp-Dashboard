@@ -4,30 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/firebase/firebase_providers.dart';
+import '../../core/sync/local_database_service.dart';
 import '../data/auth_providers.dart';
-import '../data/auth_repository.dart';
 import '../domain/app_user.dart';
-import 'device_name_screen.dart';
 import 'login_screen.dart';
-import 'intent_selection_screen.dart';
 import '../../memberships/data/membership_providers.dart';
 import '../../memberships/domain/membership.dart';
 import '../../memberships/presentation/business_selector_screen.dart';
-import '../../features/staff/providers/staff_providers.dart';
 
-import 'package:go_router/go_router.dart';
-
-enum _AppState {
+enum _AuthV2State {
+  unauthenticated,
+  noMembership,
+  authenticated,
   loading,
-  intentSelection,
-  login,
-  businessSetup, 
-  onboarding, // Generic onboarding state
-  selectBusiness,
-  deviceSetup,
-  pendingApproval,
-  accessDenied,
-  ready,
   error,
 }
 
@@ -41,387 +30,145 @@ class AuthGate extends ConsumerStatefulWidget {
 }
 
 class _AuthGateState extends ConsumerState<AuthGate> {
-  String? _sessionUid;
-  String? _sessionDeviceName;
-  DateTime? _loadingStartTime;
-  bool _showStuckWarning = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadingStartTime = DateTime.now();
-    _startStuckChecker();
-  }
-
-  void _startStuckChecker() {
-    Future.delayed(const Duration(seconds: 15), () {
-      if (mounted && _loadingStartTime != null) {
-        setState(() {
-          _showStuckWarning = true;
-        });
-      }
-    });
-  }
-
-  void _ensureDeviceSession({
-    required AuthRepository repo,
-    required String uid,
-    required String deviceName,
-  }) {
-    final normalizedName = deviceName.trim();
-    if (normalizedName.isEmpty) return;
-
-    if (_sessionUid == uid && _sessionDeviceName == normalizedName) return;
-    _sessionUid = uid;
-    _sessionDeviceName = normalizedName;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // ignore: discarded_futures
-      repo.registerDeviceSession(deviceName: normalizedName);
-      // ignore: discarded_futures
-      repo.heartbeat();
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateChangesProvider);
     final membershipsAsync = ref.watch(userMembershipsProvider);
-    final session = ref.watch(sessionProvider);
-    final deviceName = ref.watch(deviceNameProvider);
-    final authRepoAsync = ref.watch(authRepositoryProvider);
     final userProfileAsync = ref.watch(userProfileProvider);
-    
-    final currentPath = GoRouterState.of(context).uri.path;
+    final session = ref.watch(sessionProvider);
 
-    if (kDebugMode && authState.value != null) {
-      debugPrint('STEP_5_AUTH_GATE_RESOLUTION: Path=$currentPath, Auth=${authState.value?.uid}, Memberships=${membershipsAsync.value?.length ?? 'loading'}, Profile=${userProfileAsync.value != null ? 'loaded' : 'loading'}');
-    }
+    return authState.when(
+      data: (user) {
+        if (user == null) {
+          debugPrint('AUTH_V2_STEP_1: Unauthenticated');
+          
+          // CRITICAL: Clear leaked session data and local cache on logout
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            final session = ref.read(sessionProvider);
+            if (session.businessId != null || session.isLoaded) {
+              debugPrint('AUTH_V2_STEP_1: Clearing leaked session and local cache');
+              ref.read(sessionProvider.notifier).clear();
+              // Also ensure local partitioned storage is wiped
+              await ref.read(localDatabaseServiceProvider).clearAll();
+            }
+          });
+          
+          return const LoginScreen();
+        }
 
-    final state = _determineState(
-      authState: authState,
-      membershipsAsync: membershipsAsync,
-      session: session,
-      deviceName: deviceName,
-      profileAsync: userProfileAsync,
-      currentPath: currentPath,
-    );
+        return membershipsAsync.when(
+          data: (memberships) {
+            return userProfileAsync.when(
+              data: (profile) {
+                final activeMemberships = memberships
+                    .where((m) => m.status == MembershipStatus.accepted)
+                    .toList();
 
-    if (state != _AppState.loading && _loadingStartTime != null) {
-      _loadingStartTime = null; // Resolution reached
-    }
+                if (activeMemberships.isEmpty) {
+                  debugPrint('AUTH_V2_STEP_2: Authenticated, No Membership');
+                  
+                  // If we are in the shell, we must not show the dashboard child.
+                  // The router will handle redirection to /business-setup.
+                  // Showing a loader here is safer than showing a potentially leaked dashboard.
+                  if (widget.child != null) {
+                    return const _ProfessionalLoader(message: 'Preparing your workspace...');
+                  }
+                  
+                  return const SizedBox.shrink();
+                }
 
-    if (kDebugMode && session.businessId != null) {
-      debugPrint('AUTH_GATE: Active Session detected for Business: ${session.businessId}');
-    }
+                debugPrint('AUTH_V2_STEP_3: Authenticated, Active Membership Found');
+                
+                // Session resolution
+                if (session.businessId == null) {
+                  // If multiple businesses and no restoration hint, show selector
+                  if (activeMemberships.length > 1 && profile?.businessId == null) {
+                    return BusinessSelectorScreen(memberships: activeMemberships);
+                  }
 
-    switch (state) {
-      case _AppState.loading:
-        return _BlockingLoader(
-          showWarning: _showStuckWarning,
-          onRefresh: () {
-            ref.invalidate(userProfileProvider);
-            ref.invalidate(legacyMembershipsProvider);
-            ref.invalidate(newMembershipsProvider);
-            ref.invalidate(userMembershipsProvider);
-          },
-        );
-      case _AppState.intentSelection:
-        return const IntentSelectionScreen();
-      case _AppState.login:
-        return const LoginScreen();
-      case _AppState.businessSetup:
-      case _AppState.onboarding:
-        // Ready to show the child (setup, join, etc)
-        return widget.child ?? const IntentSelectionScreen();
-      case _AppState.pendingApproval:
-        return const _StatusScreen(
-          icon: Icons.hourglass_empty_rounded,
-          title: 'Membership Pending',
-          message: 'Your membership is awaiting approval from the business owner.',
-        );
-      case _AppState.accessDenied:
-        return const _StatusScreen(
-          icon: Icons.block_rounded,
-          title: 'Access Denied',
-          message: 'Your membership has been revoked or suspended. Please contact your administrator.',
-          isError: true,
-        );
-      case _AppState.selectBusiness:
-        // Only show accepted memberships in selector
-        final activeMemberships = membershipsAsync.value!
-            .where((m) => m.status == MembershipStatus.accepted)
-            .toList();
-        return BusinessSelectorScreen(memberships: activeMemberships);
-      case _AppState.deviceSetup:
-        return const DeviceNameScreen();
-      case _AppState.ready:
-        final user = authState.value!;
-        return authRepoAsync.when(
-          data: (repo) {
-            _ensureDeviceSession(
-              repo: repo,
-              uid: user.uid,
-              deviceName: deviceName!,
+                  _handleSessionRestoration(
+                    activeMemberships: activeMemberships,
+                    profile: profile,
+                    user: user,
+                  );
+                  return const _ProfessionalLoader(message: 'Restoring session...');
+                }
+
+                // Ensure device session is registered
+                _ensureDeviceSession(user);
+
+                return widget.child ?? const SizedBox.shrink();
+              },
+              loading: () => const _ProfessionalLoader(message: 'Loading user profile...'),
+              error: (e, st) => _BlockingError(message: 'Profile Error: $e'),
             );
-            return widget.child ?? const SizedBox.shrink();
           },
-          loading: () => const _BlockingLoader(),
-          error: (e, _) => _BlockingError(message: e.toString()),
+          loading: () => const _ProfessionalLoader(message: 'Checking memberships...'),
+          error: (e, st) => _BlockingError(message: 'Membership Error: $e'),
         );
-      case _AppState.error:
-        final error = authState.error ?? membershipsAsync.error ?? userProfileAsync.error;
-        return _BlockingError(message: error.toString());
-    }
+      },
+      loading: () => const _ProfessionalLoader(message: 'Authenticating...'),
+      error: (e, st) => _BlockingError(message: 'Auth Error: $e'),
+    );
   }
 
-  _AppState _determineState({
-    required AsyncValue<User?> authState,
-    required AsyncValue<List<Membership>> membershipsAsync,
-    required SessionState session,
-    required String? deviceName,
-    required AsyncValue<AppUser?> profileAsync,
-    required String currentPath,
+  void _handleSessionRestoration({
+    required List<Membership> activeMemberships,
+    required AppUser? profile,
+    required User user,
   }) {
-    if (authState.isLoading || membershipsAsync.isLoading || profileAsync.isLoading) {
-      if (kDebugMode) {
-        final List<String> waitingOn = [];
-        if (authState.isLoading) waitingOn.add('Auth');
-        if (membershipsAsync.isLoading) waitingOn.add('Memberships');
-        if (profileAsync.isLoading) waitingOn.add('Profile');
-        
-        debugPrint('AUTH_GATE: Loading state active. Waiting on: ${waitingOn.join(', ')}. Path: $currentPath');
-      }
-      return _AppState.loading;
-    }
-    
-    if (authState.hasError || membershipsAsync.hasError || profileAsync.hasError) {
-      debugPrint('AUTH_GATE_ERROR: authErr=${authState.error}, membershipErr=${membershipsAsync.error}, profileErr=${profileAsync.error}');
-      return _AppState.error;
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
 
-    final user = authState.value;
-    if (user == null) {
-      if (kDebugMode) {
-        debugPrint('AUTH_GATE: No Firebase User found. Path: $currentPath');
-      }
-      
-      // ALLOW Onboarding/Landing routes without a user
-      final publicRoutes = [
-        '/auth/join',
-        '/auth/signup',
-        '/auth/otp',
-        '/business-setup',
-        '/auth/login',
-        '/auth/forgot-password',
-        '/onboarding'
-      ];
-      if (publicRoutes.contains(currentPath)) {
-        return _AppState.onboarding; 
-      }
-
-      // Clear session on logout
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && ref.read(sessionProvider).businessId != null) {
-          debugPrint('AUTH_GATE: Clearing session on logout');
-          ref.read(sessionProvider.notifier).clear();
-        }
-      });
-      return _AppState.intentSelection;
-    }
-
-    if (kDebugMode) {
-      debugPrint('AUTH_GATE: User Resolved: ${user.uid}. Email: ${user.email}. Path: $currentPath');
-    }
-
-    final memberships = membershipsAsync.value ?? [];
-    final profile = profileAsync.value; 
-    
-    final activeMemberships = memberships.where((m) => 
-      m.status == MembershipStatus.accepted).toList();
-    final pendingMemberships = memberships.where((m) => 
-      m.status == MembershipStatus.pending).toList();
-    final deniedMemberships = memberships.where((m) => 
-      m.status == MembershipStatus.revoked || 
-      m.status == MembershipStatus.suspended || 
-      m.status == MembershipStatus.removed).toList();
-
-    if (kDebugMode) {
-      debugPrint('AUTH_GATE: Membership Stats: Total=${memberships.length}, Active=${activeMemberships.length}, Pending=${pendingMemberships.length}, Denied=${deniedMemberships.length}');
+      // 1. Try to restore from profile
       if (profile?.businessId != null) {
-        debugPrint('AUTH_GATE: Profile BusinessId: ${profile?.businessId}');
-      }
-    }
-
-    // Auth Resolution Flow
-    
-    // CASE A — empty result (no memberships at all)
-    if (memberships.isEmpty) {
-      // If we are still loading profile or memberships, wait.
-      if (profile != null && profile.businessId != null) {
-        if (kDebugMode) {
-          debugPrint('AUTH_GATE: Profile has businessId (${profile.businessId}) but memberships provider is empty. Waiting for sync...');
-        }
-        return _AppState.loading;
-      }
-
-      // If we are on a protected route but memberships are empty, wait a bit
-      // to avoid race conditions after signup/invite claim.
-      final onboardingRoutes = ['/business-setup', '/auth/join', '/auth/signup', '/auth/otp', '/onboarding'];
-      final isProtected = !onboardingRoutes.contains(currentPath) && currentPath != '/' && currentPath != '';
-      
-      if (isProtected) {
-        if (kDebugMode) {
-          debugPrint('AUTH_GATE: Protected route $currentPath with no memberships. Showing loader to allow sync...');
-        }
-        return _AppState.loading;
-      }
-
-      // AUTO CLAIM if pending invite exists
-      final pendingInvite = ref.read(pendingInviteProvider);
-      if (pendingInvite != null) {
-        if (kDebugMode) {
-          debugPrint('AUTH_GATE: Auto-claiming pending invite for ${pendingInvite.businessId}');
-        }
-        
-        WidgetsBinding.instance.addPostFrameCallback((_) async {
-          ref.read(pendingInviteProvider.notifier).state = null;
-          try {
-            await ref.read(claimInviteProvider.notifier).claim(
-              businessId: pendingInvite.businessId,
-              inviteCode: pendingInvite.code,
-            );
-          } catch (e) {
-            debugPrint('AUTH_GATE: Auto-claim failed: $e');
-          }
-        });
-        return _AppState.loading;
-      }
-
-      if (kDebugMode) {
-        debugPrint('AUTH_GATE: No memberships found. Path: $currentPath');
-      }
-
-      // Allow onboarding-related routes to show through
-      if (onboardingRoutes.contains(currentPath)) {
-        return _AppState.onboarding;
-      }
-
-      return _AppState.intentSelection;
-    }
-
-    // CASE B: Handling Membership Statuses
-    if (activeMemberships.isEmpty) {
-      if (pendingMemberships.isNotEmpty) {
-        return _AppState.pendingApproval;
-      }
-      if (deniedMemberships.isNotEmpty) {
-        return _AppState.accessDenied;
-      }
-      
-      // If we are here, it means memberships list has items but none are active, pending, or denied?
-      // Should not happen with current enums, but let's be safe.
-      debugPrint('AUTH_GATE: Warning - User has memberships but none match active/pending/denied filters.');
-      return _AppState.intentSelection;
-    }
-
-    // CASE C: Resolution for Active Memberships
-    if (session.businessId != null) {
-      final currentMembership = activeMemberships.where((m) => m.businessId == session.businessId).firstOrNull;
-      
-      if (currentMembership == null) {
-        // Active session is for a business where membership is no longer active
-        
-        // SYNC CHECK: If the user profile STILL says they belong to this business, 
-        // it's likely a Firestore sync lag. We wait instead of clearing.
-        if (profile?.businessId == session.businessId && !_showStuckWarning) {
-          if (kDebugMode) {
-            debugPrint('AUTH_GATE: Session exists for ${session.businessId} but membership not found in query yet. Profile matches. WAITING for sync...');
-          }
-          return _AppState.loading;
-        }
-
-        debugPrint('AUTH_GATE: Session exists for ${session.businessId} but membership is no longer accepted or profile changed. Clearing session.');
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) ref.read(sessionProvider.notifier).clear();
-        });
-        return _AppState.loading;
-      }
-    }
-
-    if (session.businessId == null) {
-      // RESTORATION HINT: Use businessId from user profile if available
-      if (profile?.businessId != null) {
-        final matching = activeMemberships.where((m) => m.businessId == profile!.businessId).firstOrNull;
+        final matching = activeMemberships
+            .where((m) => m.businessId == profile!.businessId)
+            .firstOrNull;
         if (matching != null) {
-          if (kDebugMode) {
-            debugPrint('AUTH_GATE: Restoring session from profile: ${matching.businessId}');
-          }
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            ref.read(sessionProvider.notifier).setSession(
-              businessId: matching.businessId,
-              userUid: user.uid,
-              role: matching.role,
-              membershipId: matching.membershipId,
-              branchId: matching.branchId,
-            );
-          });
-          return _AppState.loading;
+          ref.read(sessionProvider.notifier).setSession(
+                businessId: matching.businessId,
+                userUid: user.uid,
+                role: matching.role,
+                membershipId: matching.membershipId,
+                branchId: matching.branchId,
+              );
+          return;
         }
       }
 
+      // 2. If only one membership, auto-select it
       if (activeMemberships.length == 1) {
         final m = activeMemberships.first;
-        if (kDebugMode) {
-          debugPrint('AUTH_GATE: Auto-resolving single active membership: ${m.businessId}');
-        }
-        
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          ref.read(sessionProvider.notifier).setSession(
-            businessId: m.businessId,
-            userUid: user.uid,
-            role: m.role,
-            membershipId: m.membershipId,
-            branchId: m.branchId,
-          );
-        });
-        return _AppState.loading;
-      } else {
-        if (kDebugMode) {
-          debugPrint('AUTH_GATE: Multiple active memberships (${activeMemberships.length}), showing selector');
-        }
-        return _AppState.selectBusiness;
+        ref.read(sessionProvider.notifier).setSession(
+              businessId: m.businessId,
+              userUid: user.uid,
+              role: m.role,
+              membershipId: m.membershipId,
+              branchId: m.branchId,
+            );
       }
-    }
+    });
+  }
 
-    if (kDebugMode) {
-      debugPrint('AUTH_GATE: Ready. Business: ${session.businessId}, Device: $deviceName');
-    }
+  void _ensureDeviceSession(User user) {
+    final deviceName = ref.read(deviceNameProvider);
+    if (deviceName == null || deviceName.trim().isEmpty) return;
 
-    // Device Setup logic
-    if (deviceName == null || deviceName.trim().isEmpty) {
-      if (profile != null && profile.displayName.trim().isNotEmpty) {
-        if (kDebugMode) {
-          debugPrint('AUTH_GATE: Auto-setting device name from profile: ${profile.displayName}');
-        }
-        WidgetsBinding.instance.addPostFrameCallback((_) async {
-          final repo = await ref.read(authRepositoryProvider.future);
-          await repo.setLocalDeviceName(profile.displayName);
-          ref.read(deviceNameProvider.notifier).state = profile.displayName;
-        });
-        return _AppState.loading;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final authRepoAsync = ref.read(authRepositoryProvider);
+      if (authRepoAsync.hasValue) {
+        final repo = authRepoAsync.value!;
+        await repo.registerDeviceSession(deviceName: deviceName);
+        await repo.heartbeat();
       }
-      return _AppState.deviceSetup;
-    }
-
-    return _AppState.ready;
+    });
   }
 }
 
-class _BlockingLoader extends StatelessWidget {
-  const _BlockingLoader({this.showWarning = false, this.onRefresh});
-  final bool showWarning;
-  final VoidCallback? onRefresh;
+class _ProfessionalLoader extends StatelessWidget {
+  const _ProfessionalLoader({required this.message});
+  final String message;
 
   @override
   Widget build(BuildContext context) {
@@ -431,33 +178,15 @@ class _BlockingLoader extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const CircularProgressIndicator(),
-            if (showWarning) ...[
-              const SizedBox(height: 24),
-              const Text(
-                'Taking longer than usual...',
-                style: TextStyle(fontWeight: FontWeight.bold),
+            const SizedBox(height: 24),
+            Text(
+              message,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey,
               ),
-              const SizedBox(height: 8),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 40),
-                child: Text(
-                  'We are having trouble syncing your account. This can happen during first-time join if Firestore indexing is slow.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ),
-              const SizedBox(height: 24),
-              if (onRefresh != null)
-                TextButton.icon(
-                  onPressed: onRefresh,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Retry Sync'),
-                ),
-              TextButton(
-                onPressed: () => FirebaseAuth.instance.signOut(),
-                child: const Text('Sign Out', style: TextStyle(color: Colors.red)),
-              ),
-            ],
+            ),
           ],
         ),
       ),
@@ -467,7 +196,6 @@ class _BlockingLoader extends StatelessWidget {
 
 class _BlockingError extends StatelessWidget {
   const _BlockingError({required this.message});
-
   final String message;
 
   @override
@@ -484,60 +212,11 @@ class _BlockingError extends StatelessWidget {
               Text(
                 message,
                 textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 24),
               FilledButton(
                 onPressed: () => FirebaseAuth.instance.signOut(),
-                child: const Text('Sign Out'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusScreen extends StatelessWidget {
-  const _StatusScreen({
-    required this.icon,
-    required this.title,
-    required this.message,
-    this.isError = false,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-  final bool isError;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 64, color: isError ? Colors.red : Colors.blue),
-              const SizedBox(height: 24),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-              const SizedBox(height: 40),
-              OutlinedButton(
-                onPressed: () => FirebaseAuth.instance.signOut(),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(200, 50),
-                ),
                 child: const Text('Sign Out'),
               ),
             ],

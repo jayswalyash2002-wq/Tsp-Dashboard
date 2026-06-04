@@ -1,4 +1,5 @@
 import 'dart:async' show unawaited;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../auth/data/auth_providers.dart';
 import '../../core/firebase/firebase_providers.dart';
+import '../../core/sync/local_database_service.dart';
 import '../../core/utils/business_date_utils.dart';
 import '../../dashboard/data/dashboard_providers.dart';
 import '../../business/data/business_providers.dart';
@@ -135,19 +137,53 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             FilledButton.tonal(
               onPressed: () async {
-                unawaited(
-                  ref.read(logActivityUseCaseProvider).execute(
-                    action: ActivityAction.userLoggedOut,
-                    category: ActivityCategory.authentication,
+                final proceed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Logout'),
+                    content: const Text('Are you sure you want to logout?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Logout'),
+                      ),
+                    ],
                   ),
                 );
 
-                final repo = await ref.read(authRepositoryProvider.future);
-                await repo.signOut();
-                // Clear local device name state on logout
-                ref.read(deviceNameProvider.notifier).state = null;
-                if (!context.mounted) return;
-                context.go('/auth');
+                if (proceed != true) return;
+
+                try {
+                  // 1. Log activity (Best effort)
+                  unawaited(
+                    ref.read(logActivityUseCaseProvider).execute(
+                      action: ActivityAction.userLoggedOut,
+                      category: ActivityCategory.authentication,
+                    ).catchError((e) => debugPrint('Logout log failed: $e')),
+                  );
+
+                  // 2. Clear session state immediately to prevent data leaks
+                  ref.read(sessionProvider.notifier).clear();
+                  
+                  // 3. Perform Sign Out
+                  // We use direct instance to avoid any FutureProvider hangs
+                  await FirebaseAuth.instance.signOut();
+                  
+                  // 4. Reset local state
+                  ref.read(deviceNameProvider.notifier).state = null;
+                  
+                  if (!context.mounted) return;
+                  context.go('/auth/login');
+                } catch (e) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Logout failed: $e')),
+                  );
+                }
               },
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(56),

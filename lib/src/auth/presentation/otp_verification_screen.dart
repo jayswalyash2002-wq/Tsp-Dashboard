@@ -100,9 +100,6 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
       // Dismiss keyboard on success
       FocusManager.instance.primaryFocus?.unfocus();
 
-      // Sync local state for AuthGate to bypass DeviceNameScreen
-      ref.read(deviceNameProvider.notifier).state = widget.name;
-
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

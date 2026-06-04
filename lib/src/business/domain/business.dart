@@ -16,6 +16,7 @@ class Business {
   final String? fssaiNumber;
   final String? address;
   final String? logoUrl;
+  final String? description;
   final DateTime createdAt;
   final String? status;
   
@@ -46,6 +47,7 @@ class Business {
     this.fssaiNumber,
     this.address,
     this.logoUrl,
+    this.description,
     required this.createdAt,
     this.status = 'active',
     this.autoOpenEnabled = false,
@@ -78,6 +80,7 @@ class Business {
       fssaiNumber: map['fssaiNumber'],
       address: map['address'],
       logoUrl: map['logoUrl'],
+      description: map['description'],
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       status: map['status'] ?? 'active',
       autoOpenEnabled: map['autoOpenEnabled'] ?? false,
@@ -109,6 +112,7 @@ class Business {
       'fssaiNumber': fssaiNumber,
       'address': address,
       'logoUrl': logoUrl,
+      'description': description,
       'createdAt': createdAt, 
       'status': status,
       'autoOpenEnabled': autoOpenEnabled,
@@ -145,6 +149,7 @@ class Business {
     String? fssaiNumber,
     String? address,
     String? logoUrl,
+    String? description,
     DateTime? createdAt,
     String? status,
     bool? autoOpenEnabled,
@@ -173,6 +178,7 @@ class Business {
       fssaiNumber: fssaiNumber ?? this.fssaiNumber,
       address: address ?? this.address,
       logoUrl: logoUrl ?? this.logoUrl,
+      description: description ?? this.description,
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
       autoOpenEnabled: autoOpenEnabled ?? this.autoOpenEnabled,
